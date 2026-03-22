@@ -26,6 +26,36 @@ function nextZIndex(tiles: Tile[]) {
   return tiles.length === 0 ? 1 : Math.max(...tiles.map((t) => t.zIndex)) + 1
 }
 
+/** Check if a rect overlaps any existing tile */
+function overlaps(tiles: Tile[], x: number, y: number, w: number, h: number): boolean {
+  const GAP = 24
+  return tiles.some((t) =>
+    x < t.x + t.w + GAP &&
+    x + w + GAP > t.x &&
+    y < t.y + t.h + GAP &&
+    y + h + GAP > t.y
+  )
+}
+
+/** Find a non-overlapping position starting from (startX, startY).
+ *  Tries the original position first, then scans right, then wraps to next row. */
+function findFreePosition(tiles: Tile[], startX: number, startY: number, w: number, h: number): { x: number; y: number } {
+  if (!overlaps(tiles, startX, startY, w, h)) return { x: startX, y: startY }
+
+  const STEP_X = snapToGrid(w + 36)
+  const STEP_Y = snapToGrid(h + 36)
+  // Try positions to the right, then next row
+  for (let row = 0; row < 20; row++) {
+    for (let col = 0; col < 20; col++) {
+      const cx = snapToGrid(startX + col * STEP_X)
+      const cy = snapToGrid(startY + row * STEP_Y)
+      if (!overlaps(tiles, cx, cy, w, h)) return { x: cx, y: cy }
+    }
+  }
+  // Fallback: offset from last tile
+  return { x: startX + tiles.length * 30, y: startY + tiles.length * 30 }
+}
+
 // ─── Store shape ──────────────────────────────────────────────────────────────
 
 export interface CanvasStore {
@@ -245,14 +275,17 @@ export const useStore = create<CanvasStore>()(
 
     spawnTile: (kind, x, y) => {
       const { tiles, panX, panY, zoom } = get()
-      const cx = snapToGrid(x ?? (window.innerWidth / 2 - panX) / zoom - 200)
-      const cy = snapToGrid(y ?? (window.innerHeight / 2 - panY) / zoom - 150)
+      const tileW = snapToGrid(640)
+      const tileH = snapToGrid(396)
+      const cx = snapToGrid(x ?? (window.innerWidth / 2 - panX) / zoom - tileW / 2)
+      const cy = snapToGrid(y ?? (window.innerHeight / 2 - panY) / zoom - tileH / 2)
+      const { x: safeX, y: safeY } = findFreePosition(tiles, cx, cy, tileW, tileH)
       const tile: Tile = {
         id: nextId(),
-        x: cx,
-        y: cy,
-        w: snapToGrid(640),
-        h: snapToGrid(396),
+        x: safeX,
+        y: safeY,
+        w: tileW,
+        h: tileH,
         name: (() => {
           const base = kind === 'terminal' ? 'Terminal' : kind === 'http' ? 'HTTP' : 'PostgreSQL'
           const count = tiles.filter((t) => t.kind === kind).length + 1
