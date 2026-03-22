@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import { ArrowLeft, ArrowRight, RotateCw, ExternalLink, Compass } from 'lucide-react'
+import { ArrowLeft, ArrowRight, RotateCw, ExternalLink, Compass, Plus, X } from 'lucide-react'
 import { useStore } from '../store'
 
 // ── Persistent webview registry ──────────────────────────────────────────────
@@ -11,6 +11,23 @@ interface BrowserEntry {
 }
 
 const browserRegistry = new Map<string, BrowserEntry>()
+
+// ── Shortcuts persistence ────────────────────────────────────────────────────
+
+const DEFAULT_SHORTCUTS = ['localhost:3000', 'localhost:5173', 'localhost:8080']
+const STORAGE_KEY = 'sunnyterm:browser-shortcuts'
+
+function loadShortcuts(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return [...DEFAULT_SHORTCUTS]
+}
+
+function saveShortcuts(shortcuts: string[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(shortcuts))
+}
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -50,8 +67,6 @@ export function BrowserTile({ tileId }: Props) {
       entry.currentUrl = normalized
       webviewRef.current?.loadURL(normalized)
     } else {
-      // Create webview on first navigation — use src attribute, not loadURL,
-      // because the webview isn't ready yet right after createElement
       if (!containerRef.current) return
       const wv = document.createElement('webview') as unknown as Electron.WebviewTag
       wv.setAttribute('src', normalized)
@@ -85,7 +100,6 @@ export function BrowserTile({ tileId }: Props) {
     const existing = browserRegistry.get(tileId)
 
     if (existing) {
-      // Reattach existing webview (view switch)
       containerRef.current.appendChild(existing.webview)
       webviewRef.current = existing.webview as Electron.WebviewTag
       setInputValue(existing.currentUrl)
@@ -98,7 +112,6 @@ export function BrowserTile({ tileId }: Props) {
       }
     }
 
-    // No existing entry — empty state, webview created on first navigate
     return () => {
       const entry = browserRegistry.get(tileId)
       if (!entry) return
@@ -181,9 +194,9 @@ export function BrowserTile({ tileId }: Props) {
         </button>
       </form>
 
-      {/* Content — overflow:hidden + isolation:isolate to contain the webview */}
+      {/* Content */}
       <div ref={containerRef} className="flex-1 min-h-0 relative overflow-hidden" style={{ isolation: 'isolate' }}>
-        {!hasNavigated && <EmptyState />}
+        {!hasNavigated && <EmptyState onNavigate={navigate} />}
       </div>
     </div>
   )
@@ -191,23 +204,84 @@ export function BrowserTile({ tileId }: Props) {
 
 // ── Empty state ──────────────────────────────────────────────────────────────
 
-function EmptyState() {
+function EmptyState({ onNavigate }: { onNavigate: (url: string) => void }) {
+  const [shortcuts, setShortcuts] = useState(loadShortcuts)
+  const [adding, setAdding] = useState(false)
+  const [newUrl, setNewUrl] = useState('')
+  const addInputRef = useRef<HTMLInputElement>(null)
+
+  const addShortcut = () => {
+    const url = newUrl.trim()
+    if (url && !shortcuts.includes(url)) {
+      const next = [...shortcuts, url]
+      setShortcuts(next)
+      saveShortcuts(next)
+    }
+    setNewUrl('')
+    setAdding(false)
+  }
+
+  const removeShortcut = (url: string) => {
+    const next = shortcuts.filter((s) => s !== url)
+    setShortcuts(next)
+    saveShortcuts(next)
+  }
+
+  useEffect(() => {
+    if (adding) addInputRef.current?.focus()
+  }, [adding])
+
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-text-muted">
       <Compass size={32} className="opacity-20" />
       <div className="text-center">
         <p className="text-xs font-medium text-text-secondary">No page loaded</p>
-        <p className="text-[11px] mt-1 opacity-60">Type a URL above and press Enter</p>
+        <p className="text-[11px] mt-1 opacity-60">Click a shortcut or type a URL above</p>
       </div>
-      <div className="flex items-center gap-2 mt-2">
-        {['localhost:3000', 'localhost:5173', 'localhost:8080'].map((hint) => (
-          <span
-            key={hint}
-            className="px-2 py-0.5 rounded bg-black/5 dark:bg-white/5 text-[10px] font-mono text-text-muted"
-          >
-            {hint}
-          </span>
+      <div className="flex flex-wrap items-center justify-center gap-2 mt-2 max-w-xs">
+        {shortcuts.map((url) => (
+          <div key={url} className="group flex items-center">
+            <button
+              onClick={() => onNavigate(url)}
+              className="px-2.5 py-1 rounded-l bg-black/5 dark:bg-white/6 text-[11px] font-mono text-text-muted hover:text-text-primary hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              {url}
+            </button>
+            <button
+              onClick={() => removeShortcut(url)}
+              className="px-1 py-1 rounded-r bg-black/5 dark:bg-white/6 text-text-muted/40 hover:text-red-400 hover:bg-black/10 dark:hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
+              title="Remove shortcut"
+            >
+              <X size={10} />
+            </button>
+          </div>
         ))}
+        {adding ? (
+          <form
+            onSubmit={(e) => { e.preventDefault(); addShortcut() }}
+            className="flex items-center"
+          >
+            <input
+              ref={addInputRef}
+              type="text"
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+              onBlur={addShortcut}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setNewUrl(''); setAdding(false) } }}
+              className="w-28 px-2 py-0.5 rounded bg-black/5 dark:bg-white/6 text-[11px] font-mono text-text-primary outline-none border border-blue-400/40"
+              placeholder="url..."
+              spellCheck={false}
+            />
+          </form>
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            className="p-1 rounded bg-black/5 dark:bg-white/6 text-text-muted/50 hover:text-text-primary hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+            title="Add shortcut"
+          >
+            <Plus size={12} />
+          </button>
+        )}
       </div>
     </div>
   )
