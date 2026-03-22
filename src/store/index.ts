@@ -649,6 +649,10 @@ export const useStore = create<CanvasStore>()(
 
     setViewMode: (viewMode) => {
       set({ viewMode })
+      // When switching back to canvas, fit all tiles so nothing is off-screen
+      if (viewMode === 'canvas') {
+        requestAnimationFrame(() => get().fitAllTiles())
+      }
       window.electronAPI.appStateSave({
         isDark: get().isDark,
         lastWorkspace: get().activeWorkspace,
