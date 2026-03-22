@@ -649,22 +649,6 @@ export const useStore = create<CanvasStore>()(
 
     setViewMode: (viewMode) => {
       set({ viewMode })
-      // When switching back to canvas, force a repaint by nudging pan
-      // and then fit all tiles so nothing is off-screen
-      if (viewMode === 'canvas') {
-        // Double rAF: first to let the DOM mount, second to trigger layout
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            const { panX } = get()
-            // Nudge pan to force a full repaint cycle
-            set({ panX: panX + 0.1 })
-            requestAnimationFrame(() => {
-              set({ panX })
-              get().fitAllTiles()
-            })
-          })
-        })
-      }
       window.electronAPI.appStateSave({
         isDark: get().isDark,
         lastWorkspace: get().activeWorkspace,

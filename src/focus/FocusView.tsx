@@ -73,6 +73,7 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
   const cardRef = useRef<HTMLDivElement>(null)
   const focusedId = useStore((s) => s.focusedId)
   const exitedTileIds = useStore((s) => s.exitedTileIds)
+  const viewMode = useStore((s) => s.viewMode)
   const { focusTile, removeTile, renameTile, spawnTile, startLinking } = useStore()
   const isFocused = focusedId === tile.id
   const isExited = exitedTileIds.includes(tile.id)
@@ -250,14 +251,18 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
           )}
         </div>
 
-        {/* Content */}
+        {/* Content — only render when focus view is active */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {tile.kind === 'terminal' && (
-            <TerminalTile tileId={tile.id} overrideW={cardW} overrideH={contentH} />
+          {viewMode === 'focus' && (
+            <>
+              {tile.kind === 'terminal' && (
+                <TerminalTile tileId={tile.id} overrideW={cardW} overrideH={contentH} />
+              )}
+              {tile.kind === 'http' && <HttpTile tileId={tile.id} />}
+              {tile.kind === 'postgres' && <PostgresTile tileId={tile.id} />}
+              {tile.kind === 'browser' && <BrowserTile tileId={tile.id} />}
+            </>
           )}
-          {tile.kind === 'http' && <HttpTile tileId={tile.id} />}
-          {tile.kind === 'postgres' && <PostgresTile tileId={tile.id} />}
-          {tile.kind === 'browser' && <BrowserTile tileId={tile.id} />}
         </div>
       </div>
     </div>

@@ -48,6 +48,7 @@ class TileErrorBoundary extends Component<{ children: React.ReactNode; tileId: s
 export function TileContainer({ tile, isSelected }: Props) {
   const focusedId = useStore((s) => s.focusedId)
   const exitedTileIds = useStore((s) => s.exitedTileIds)
+  const viewMode = useStore((s) => s.viewMode)
   const { focusTile, removeTile, renameTile, spawnTile, startLinking } = useStore()
   const isFocused = focusedId === tile.id
   const isExited = exitedTileIds.includes(tile.id)
@@ -232,14 +233,17 @@ export function TileContainer({ tile, isSelected }: Props) {
           </button>
         </div>
 
-        {/* Content area */}
+        {/* Content area — skip rendering when canvas is hidden (focus mode)
+            to avoid competing with FocusView for xterm/webview elements */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          <TileErrorBoundary tileId={tile.id}>
-            {tile.kind === 'terminal' && <TerminalTile tileId={tile.id} />}
-            {tile.kind === 'http' && <HttpTile tileId={tile.id} />}
-            {tile.kind === 'postgres' && <PostgresTile tileId={tile.id} />}
-            {tile.kind === 'browser' && <BrowserTile tileId={tile.id} />}
-          </TileErrorBoundary>
+          {viewMode === 'canvas' && (
+            <TileErrorBoundary tileId={tile.id}>
+              {tile.kind === 'terminal' && <TerminalTile tileId={tile.id} />}
+              {tile.kind === 'http' && <HttpTile tileId={tile.id} />}
+              {tile.kind === 'postgres' && <PostgresTile tileId={tile.id} />}
+              {tile.kind === 'browser' && <BrowserTile tileId={tile.id} />}
+            </TileErrorBoundary>
+          )}
         </div>
 
         {/* Resize handle */}
