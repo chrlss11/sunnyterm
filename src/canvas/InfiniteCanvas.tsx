@@ -1,6 +1,7 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react'
 import { useStore } from '../store'
 import { TileContainer, TITLE_BAR_H } from '../tiles/TileContainer'
+import { SectionBox } from './SectionBox'
 import { Minimap } from '../minimap/Minimap'
 import type { DragState, Tile } from '../types'
 
@@ -42,6 +43,7 @@ export function InfiniteCanvas() {
   const drag = useStore((s) => s.drag)
   const linkingFromId = useStore((s) => s.linkingFromId)
   const selectedIds = useStore((s) => s.selectedIds)
+  const sections = useStore((s) => s.sections)
 
   const {
     zoomAt, panBy, spawnTile, removeTile, focusTile,
@@ -183,7 +185,6 @@ export function InfiniteCanvas() {
           groupStarts
         }
         startDrag(dragState)
-        e.currentTarget.setPointerCapture(e.pointerId)
       }
     },
     [tiles, zoom, panX, panY, toCanvas, linkingFromId, selectedIds, focusTile, spawnTile, removeTile, startDrag, completeLinking, cancelLinking, clearSelection]
@@ -273,9 +274,9 @@ export function InfiniteCanvas() {
   const sortedTiles = [...tiles].sort((a, b) => a.zIndex - b.zIndex)
 
   const isDark = useStore((s) => s.isDark)
-  const gridSpacing = GRID_SPACING * zoom
-  const dotColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(138,138,150,0.3)'
-  const dotR = 0.75
+  const gridSpacing = 16
+  const dotColor = isDark ? 'rgba(255,255,255,0.13)' : 'rgba(138,138,150,0.25)'
+  const glowDotColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(100,100,120,0.6)'
 
   return (
     <div
@@ -294,7 +295,7 @@ export function InfiniteCanvas() {
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: `radial-gradient(circle, ${dotColor} ${dotR}px, transparent ${dotR}px)`,
+          backgroundImage: `radial-gradient(circle at center, ${dotColor} 1px, transparent 1px)`,
           backgroundSize: `${gridSpacing}px ${gridSpacing}px`,
           backgroundPosition: `${panX % gridSpacing}px ${panY % gridSpacing}px`
         }}
@@ -313,7 +314,7 @@ export function InfiniteCanvas() {
               top: localY - GLOW_RADIUS,
               width: GLOW_RADIUS * 2,
               height: GLOW_RADIUS * 2,
-              backgroundImage: `radial-gradient(circle, ${dotColor} ${dotR}px, transparent ${dotR}px)`,
+              backgroundImage: `radial-gradient(circle at center, ${glowDotColor} 1px, transparent 1px)`,
               backgroundSize: `${gridSpacing}px ${gridSpacing}px`,
               backgroundPosition: `${(panX % gridSpacing) - (localX - GLOW_RADIUS)}px ${(panY % gridSpacing) - (localY - GLOW_RADIUS)}px`,
               mask: 'radial-gradient(circle, black 0%, transparent 70%)',
@@ -331,6 +332,11 @@ export function InfiniteCanvas() {
           transformOrigin: '0 0'
         }}
       >
+
+        {/* Sections (behind tiles) */}
+        {sections.map((section) => (
+          <SectionBox key={section.id} section={section} />
+        ))}
 
         {/* Tiles */}
         {sortedTiles.map((tile) => (

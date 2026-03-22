@@ -34,6 +34,7 @@ export function useKeyboard() {
     saveWorkspace, loadWorkspace,
     resetView, fitAllTiles, zoomIn, zoomOut,
     toggleDark, toggleShortcuts,
+    createSection,
     focusedId, linkingFromId, workspaces
   } = useStore()
 
@@ -150,6 +151,14 @@ export function useKeyboard() {
           e.preventDefault()
           if (focusedId) startLinking(focusedId)
           break
+        case 'g': {
+          e.preventDefault()
+          const { selectedIds } = useStore.getState()
+          if (selectedIds.length >= 1) {
+            createSection(selectedIds)
+          }
+          break
+        }
         case 's':
           e.preventDefault()
           saveWorkspace(undefined, true)
@@ -169,10 +178,6 @@ export function useKeyboard() {
           e.preventDefault()
           zoomOut()
           break
-        case 'q':
-          e.preventDefault()
-          window.close()
-          break
       }
     }
 
@@ -184,7 +189,7 @@ export function useKeyboard() {
     toggleMinimap, toggleSearch, startLinking, cancelLinking,
     saveWorkspace, loadWorkspace,
     resetView, fitAllTiles, zoomIn, zoomOut,
-    toggleDark, toggleShortcuts
+    toggleDark, toggleShortcuts, createSection
   ])
 
   // ── Handle menu actions from main process ─────────────────────────────────

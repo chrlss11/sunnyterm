@@ -1,146 +1,88 @@
-# SunnyTerm Electron
+# SunnyTerm
 
-An infinite canvas terminal emulator — Electron port of [SunnyTerm](../sunnyterm) (originally a Rust + WGPU app).
+An infinite canvas terminal emulator. Terminals live as tiles you can freely arrange, group, link, and navigate on a zoomable canvas.
 
-## What is this?
+![SunnyTerm](https://img.shields.io/badge/version-0.1.0-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
 
-SunnyTerm is a terminal emulator where terminals live as tiles on an infinite, pannable, zoomable canvas. You can have dozens of terminals open simultaneously, arrange them spatially, link their outputs together, and quickly navigate with a minimap.
+## Install
 
-This Electron version replaces the custom WGPU GPU renderer with xterm.js + WebGL and wraps everything in React with a proper IPC bridge to node-pty.
-
-## Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Shell | Electron 33 |
-| Renderer | React 18 + TypeScript |
-| Terminal | xterm.js 5 + WebGL addon |
-| PTY | node-pty |
-| State | Zustand 5 |
-| Build | electron-vite 2 |
-| Styling | Tailwind CSS 3 |
-| Canvas | CSS `transform: translate scale` |
-
-## Getting Started
+### macOS (Apple Silicon)
 
 ```bash
-cd sunnyterm-electron
-npm install
-npm start          # dev mode with hot reload
-npm run build      # production build
+curl -fsSL https://github.com/noesrafa/sunnyterm/releases/latest/download/SunnyTerm-arm64.dmg -o SunnyTerm.dmg
+open SunnyTerm.dmg
 ```
 
-Requires Node.js 20+ and macOS (primary target; Linux should work).
+### macOS (Intel)
+
+```bash
+curl -fsSL https://github.com/noesrafa/sunnyterm/releases/latest/download/SunnyTerm-x64.dmg -o SunnyTerm.dmg
+open SunnyTerm.dmg
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/noesrafa/sunnyterm.git
+cd sunnyterm
+bun install
+bun run dev       # dev mode with hot reload
+bun run dist      # build .dmg + .zip
+```
+
+Requires Node.js 20+ (or Bun) and macOS.
 
 ## Features
 
-### Implemented (Phase 1 Scaffold)
-- **Infinite canvas** — pan with Space+drag or scroll; zoom with Cmd+scroll
-- **Terminal tiles** — full xterm-256color with WebGL rendering via xterm.js
-- **Tile management** — create (double-click canvas or toolbar), move (drag title bar), resize (corner handle), close (× button)
-- **Magnetic edge snapping** — tiles snap to each other's edges within 12px
-- **Double-click rename** — rename any tile by double-clicking its title bar
-- **Undo/redo** — move, resize, create, delete, and rename actions (50 action limit)
-- **Minimap** — Cmd+M to toggle; SVG overview of all tiles; click to pan
-- **Tile linking** — Cmd+L to link output of focused tile → click another tile to receive
-- **Global search** — Cmd+F (xterm SearchAddon integration TODO)
-- **Toolbar** — spawn terminals, HTTP clients, PostgreSQL clients; undo/redo buttons
-- **macOS integration** — hidden title bar with traffic lights, vibrancy
-
-### Planned (see MIGRATION_PLAN.md)
-- Search within terminals (xterm SearchAddon)
-- OSC title → tile rename
-- Tile output linking (ANSI-stripped pipe)
-- Workspace save/load (Cmd+1-9)
-- State persistence (zoom/pan/layout on quit)
-- HTTP client tile
-- PostgreSQL client tile
-- Pinch-to-zoom
-- Light theme
+- **Infinite canvas** — pan (Space+drag, scroll) and zoom (Cmd+scroll, pinch)
+- **Terminal tiles** — full xterm-256color terminals with node-pty
+- **Sections** — group tiles into labeled sections (Cmd+G), move/resize sections with their contents
+- **Tile management** — create, move, resize, close, rename, duplicate
+- **Tile linking** — pipe output from one terminal to another (Cmd+L)
+- **Minimap** — click or drag to navigate (Cmd+M to toggle)
+- **Workspaces** — save/load layouts with Cmd+S, switch with Cmd+1-9
+- **Undo/redo** — full history for move, resize, create, delete, rename
+- **Search** — find across terminals (Cmd+F)
+- **Dark/light mode** — toggle with Cmd+Shift+D
+- **HTTP client** — built-in REST client tiles
+- **PostgreSQL client** — query databases from a tile
 
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| `Cmd+T` | New terminal tile |
-| `Cmd+H` | New HTTP client tile |
-| `Cmd+D` | New PostgreSQL tile |
+| `Cmd+T` | New terminal |
+| `Cmd+Shift+N` | New HTTP client |
+| `Cmd+Shift+P` | New PostgreSQL client |
 | `Cmd+W` | Close focused tile |
-| `Cmd+Z` | Undo |
-| `Cmd+Shift+Z` | Redo |
+| `Cmd+G` | Group selected tiles into section |
+| `Cmd+L` | Link tile output |
+| `Cmd+S` | Save workspace |
+| `Cmd+Z / Cmd+Shift+Z` | Undo / Redo |
 | `Cmd+M` | Toggle minimap |
 | `Cmd+F` | Search |
-| `Cmd+L` | Link tile output (click target to complete) |
+| `Cmd+Shift+D` | Toggle dark/light mode |
+| `Cmd+0` | Reset zoom |
+| `Cmd+1-9` | Switch workspace |
+| `Delete / Backspace` | Remove focused or selected tiles |
+| `Tab / Shift+Tab` | Cycle focus between tiles |
+| `Double-click canvas` | New terminal at cursor |
+| `Double-click title` | Rename tile |
 | `Space+drag` | Pan canvas |
 | `Cmd+scroll` | Zoom canvas |
-| `Double-click (canvas)` | Spawn terminal at cursor |
-| `Double-click (title bar)` | Rename tile |
-| `Escape` | Cancel linking |
 
-## Project Structure
+## Stack
 
-```
-sunnyterm-electron/
-├── electron/
-│   ├── main.ts          # Electron main process, IPC handlers, window creation
-│   ├── preload.ts       # contextBridge — exposes window.electronAPI to renderer
-│   └── pty.ts           # PtyManager — node-pty spawn, write, resize, kill
-├── src/
-│   ├── index.html       # Renderer entry HTML
-│   ├── main.tsx         # React root
-│   ├── App.tsx          # Root component + toolbar
-│   ├── index.css        # Tailwind base + CSS variables
-│   ├── types/
-│   │   └── index.ts     # All shared TypeScript types + ElectronAPI interface
-│   ├── store/
-│   │   └── index.ts     # Zustand store (tiles, canvas, undo, minimap, search)
-│   ├── canvas/
-│   │   └── InfiniteCanvas.tsx  # Pan/zoom container, hit testing, drag orchestration
-│   ├── tiles/
-│   │   ├── TileContainer.tsx   # Title bar, resize handle, close, rename
-│   │   ├── TerminalTile.tsx    # xterm.js terminal + node-pty IPC wiring
-│   │   ├── HttpTile.tsx        # HTTP client (TODO)
-│   │   └── PostgresTile.tsx    # PostgreSQL client (TODO)
-│   ├── snap/
-│   │   └── snap.ts      # Magnetic edge snapping algorithm (port of snap.rs)
-│   ├── minimap/
-│   │   └── Minimap.tsx  # SVG minimap overlay
-│   ├── search/
-│   │   └── SearchBar.tsx # Global search input
-│   └── hooks/
-│       └── useKeyboard.ts  # Global Cmd+* shortcuts
-├── electron.vite.config.ts
-├── tailwind.config.js
-├── tsconfig.json
-├── MIGRATION_PLAN.md    # Full Rust→TypeScript module mapping
-└── README.md
-```
+| Layer | Technology |
+|-------|-----------|
+| Shell | Electron 41 |
+| Renderer | React 19 + TypeScript |
+| Terminal | xterm.js 6 |
+| PTY | node-pty |
+| State | Zustand 5 |
+| Build | electron-vite 5 |
+| Styling | Tailwind CSS 4 |
 
-## Architecture Decisions
+## License
 
-### Why CSS transforms instead of a canvas element?
-The Rust version used WGPU for everything, including the infinite canvas. In Electron, CSS `transform: translate scale` on a container div gives us:
-- Hardware-accelerated compositing for free
-- React component tree for UI (no custom hit testing for UI elements)
-- xterm.js WebGL renders inside normal DOM, so it just works
-
-The math is identical: `canvasCoord = (screenCoord - pan) / zoom`.
-
-### Why Zustand instead of Redux?
-Zustand has less boilerplate, supports selectors natively (preventing unnecessary re-renders), and works well with Immer-style mutations. The store shape mirrors the Rust `App` struct closely.
-
-### Why electron-vite?
-Fast dev mode HMR, proper ESM support for both main and renderer, and built-in support for `externalizeDepsPlugin` (native modules like node-pty stay in main process).
-
-### IPC design
-All PTY operations go through `contextBridge`:
-```
-Renderer → ipcRenderer.invoke('pty:spawn', ...) → Main → nodePty.spawn()
-Main → webContents.send('pty:data:{id}', data) → Renderer listener
-```
-
-This keeps native code strictly in the main process and the renderer sandboxed.
-
-## Migration Status
-
-See [MIGRATION_PLAN.md](./MIGRATION_PLAN.md) for the full module-by-module mapping from Rust to TypeScript, phase roadmap, and implementation notes.
+MIT

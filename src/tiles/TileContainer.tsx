@@ -216,7 +216,7 @@ export function TileContainer({ tile, isSelected }: Props) {
             onClick={(e) => { e.stopPropagation(); removeTile(tile.id) }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <span className="text-text-muted hover:text-red-400 text-sm leading-none">×</span>
+            <span className="text-text-muted hover:text-red-400 text-lg leading-none">×</span>
           </button>
         </div>
 

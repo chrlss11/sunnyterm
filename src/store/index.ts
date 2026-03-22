@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
-import type { Tile, TileKind, CanvasAction, DragState, WorkspaceLayout, PersistedAppState } from '../types'
+import type { Tile, TileKind, CanvasAction, DragState, Section, WorkspaceLayout, PersistedAppState } from '../types'
 const GRID_SNAP = 12 // half of GRID_SPACING (24)
 const TILE_MIN_W = 300
 const TILE_MIN_H = 180
@@ -13,6 +13,9 @@ const UNDO_LIMIT = 50
 
 /** The auto-save slot — not shown in the workspace list UI */
 export const DEFAULT_WORKSPACE = '__default__'
+
+let _sectionCounter = 0
+function nextSectionId() { return `section-${Date.now()}-${_sectionCounter++}` }
 
 let _tileCounter = 0
 function nextId() {
@@ -34,6 +37,9 @@ export interface CanvasStore {
   tiles: Tile[]
   focusedId: string | null
   selectedIds: string[]
+
+  // Sections
+  sections: Section[]
 
   // Drag
   drag: DragState | null
@@ -88,6 +94,13 @@ export interface CanvasStore {
   setSelectedIds: (ids: string[]) => void
   clearSelection: () => void
 
+  createSection: (tileIds: string[]) => void
+  removeSection: (id: string) => void
+  renameSection: (id: string, name: string) => void
+  duplicateSection: (id: string) => void
+  moveSection: (id: string, dx: number, dy: number) => void
+  resizeSection: (id: string, w: number, h: number) => void
+
   startDrag: (drag: DragState) => void
   updateDrag: (mouseX: number, mouseY: number) => void
   endDrag: () => void
@@ -138,6 +151,7 @@ export const useStore = create<CanvasStore>()(
     tiles: [],
     focusedId: null,
     selectedIds: [],
+    sections: [],
     drag: null,
     showMinimap: true,
     searchOpen: false,
@@ -290,6 +304,113 @@ export const useStore = create<CanvasStore>()(
     setSelectedIds: (selectedIds) => set({ selectedIds }),
     clearSelection: () => set({ selectedIds: [] }),
 
+    // ── Sections ──────────────────────────────────────────────────────────────
+
+    createSection: (tileIds) => {
+      const { tiles, sections } = get()
+      const grouped = tiles.filter((t) => tileIds.includes(t.id))
+      if (grouped.length === 0) return
+
+      const PAD = 24
+      const LABEL_H = 32
+      const minX = Math.min(...grouped.map((t) => t.x)) - PAD
+      const minY = Math.min(...grouped.map((t) => t.y)) - PAD - LABEL_H
+      const maxX = Math.max(...grouped.map((t) => t.x + t.w)) + PAD
+      const maxY = Math.max(...grouped.map((t) => t.y + t.h)) + PAD
+
+      const section: Section = {
+        id: nextSectionId(),
+        name: `Section ${sections.length + 1}`,
+        x: snapToGrid(minX),
+        y: snapToGrid(minY),
+        w: snapToGrid(maxX - minX),
+        h: snapToGrid(maxY - minY)
+      }
+      set({ sections: [...sections, section], selectedIds: [] })
+    },
+
+    removeSection: (id) => {
+      set((s) => ({ sections: s.sections.filter((sec) => sec.id !== id) }))
+    },
+
+    renameSection: (id, name) => {
+      set((s) => ({
+        sections: s.sections.map((sec) => sec.id === id ? { ...sec, name } : sec)
+      }))
+    },
+
+    duplicateSection: (id) => {
+      const { sections, tiles } = get()
+      const sec = sections.find((s) => s.id === id)
+      if (!sec) return
+
+      // Offset: place to the right of the original with a gap
+      const offsetX = sec.w + 60
+      const offsetY = 0
+
+      // Duplicate the section
+      const dupSection: Section = {
+        id: nextSectionId(),
+        name: sec.name + ' (copy)',
+        x: sec.x + offsetX,
+        y: sec.y + offsetY,
+        w: sec.w,
+        h: sec.h
+      }
+
+      // Find contained tiles and duplicate them
+      const contained = tiles.filter((t) => {
+        const cx = t.x + t.w / 2
+        const cy = t.y + t.h / 2
+        return cx >= sec.x && cx <= sec.x + sec.w && cy >= sec.y && cy <= sec.y + sec.h
+      })
+
+      const newTiles = contained.map((t) => ({
+        ...t,
+        id: nextId(),
+        x: t.x + offsetX,
+        y: t.y + offsetY,
+        outputLink: null,
+        zIndex: nextZIndex([...tiles, ...contained]),
+        userRenamed: false
+      }))
+
+      set({
+        sections: [...sections, dupSection],
+        tiles: [...tiles, ...newTiles]
+      })
+    },
+
+    moveSection: (id, dx, dy) => {
+      const { sections, tiles } = get()
+      const sec = sections.find((s) => s.id === id)
+      if (!sec) return
+      // Find tiles inside this section (tile fully or mostly inside)
+      const contained = tiles.filter((t) => {
+        const cx = t.x + t.w / 2
+        const cy = t.y + t.h / 2
+        return cx >= sec.x && cx <= sec.x + sec.w && cy >= sec.y && cy <= sec.y + sec.h
+      })
+      set({
+        sections: sections.map((s) =>
+          s.id === id ? { ...s, x: snapToGrid(s.x + dx), y: snapToGrid(s.y + dy) } : s
+        ),
+        tiles: tiles.map((t) =>
+          contained.some((c) => c.id === t.id)
+            ? { ...t, x: snapToGrid(t.x + dx), y: snapToGrid(t.y + dy) }
+            : t
+        )
+      })
+    },
+
+    resizeSection: (id, w, h) => {
+      set((s) => ({
+        sections: s.sections.map((sec) =>
+          sec.id === id ? { ...sec, w: Math.max(120, snapToGrid(w)), h: Math.max(80, snapToGrid(h)) } : sec
+        )
+      }))
+    },
+
     // ── Drag ─────────────────────────────────────────────────────────────────
 
     startDrag: (drag) => set({ drag }),
@@ -368,6 +489,7 @@ export const useStore = create<CanvasStore>()(
       }
       set({
         tiles: [],
+        sections: [],
         focusedId: null,
         selectedIds: [],
         linkingFromId: null,
@@ -457,7 +579,7 @@ export const useStore = create<CanvasStore>()(
     // ── Workspaces ────────────────────────────────────────────────────────────
 
     saveWorkspace: async (name, explicit = false) => {
-      const { tiles, zoom, panX, panY, activeWorkspace, isDark } = get()
+      const { tiles, sections, zoom, panX, panY, activeWorkspace, isDark } = get()
       const workspaceName = name ?? activeWorkspace ?? DEFAULT_WORKSPACE
 
       // Collect CWDs for terminal tiles
@@ -472,6 +594,7 @@ export const useStore = create<CanvasStore>()(
       const layout: WorkspaceLayout = {
         name: workspaceName,
         tiles: tiles.map((t) => ({ ...t })),
+        sections: sections.map((s) => ({ ...s })),
         canvasZoom: zoom,
         canvasPanX: panX,
         canvasPanY: panY,
@@ -505,6 +628,7 @@ export const useStore = create<CanvasStore>()(
 
       set({
         tiles: layout.tiles,
+        sections: layout.sections ?? [],
         zoom: layout.canvasZoom,
         panX: layout.canvasPanX,
         panY: layout.canvasPanY,
@@ -567,6 +691,7 @@ export const useStore = create<CanvasStore>()(
       if (layout && layout.tiles.length > 0) {
         set({
           tiles: layout.tiles,
+          sections: layout.sections ?? [],
           zoom: layout.canvasZoom,
           panX: layout.canvasPanX,
           panY: layout.canvasPanY,

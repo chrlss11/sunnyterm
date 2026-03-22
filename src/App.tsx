@@ -271,6 +271,7 @@ const SHORTCUTS: { key: string; desc: string }[] = [
   { key: 'Tab', desc: 'Focus next tile' },
   { key: '⇧Tab', desc: 'Focus previous tile' },
   { key: '?', desc: 'Show this help' },
+  { key: '⌘G', desc: 'Group selected into section' },
   { key: 'Esc', desc: 'Cancel linking' },
   { key: 'Space+drag', desc: 'Pan canvas' },
   { key: '⌘+scroll', desc: 'Zoom canvas' },

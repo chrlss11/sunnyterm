@@ -138,9 +138,26 @@ function createWindow(): void {
     mainWindow!.show()
   })
 
-  // Clean up PTYs before window closes
-  mainWindow.on('close', () => {
-    ptyManager.killAll()
+  // Confirm before closing if there are open tiles
+  let forceQuit = false
+  mainWindow.on('close', (e) => {
+    if (forceQuit) return
+    e.preventDefault()
+    dialog.showMessageBox(mainWindow!, {
+      type: 'question',
+      buttons: ['Quit', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Quit SunnyTerm',
+      message: 'Are you sure you want to quit?',
+      detail: 'All open terminals will be closed.'
+    }).then(({ response }) => {
+      if (response === 0) {
+        forceQuit = true
+        ptyManager.killAll()
+        mainWindow?.destroy()
+      }
+    })
   })
 
   // Save window bounds on move/resize

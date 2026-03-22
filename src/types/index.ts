@@ -2,6 +2,17 @@
 
 export type TileKind = 'terminal' | 'http' | 'postgres'
 
+// ─── Section (Figma-style grouping) ──────────────────────────────────────────
+
+export interface Section {
+  id: string
+  name: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 // ─── Canvas tile ──────────────────────────────────────────────────────────────
 
 export interface Tile {
@@ -58,6 +69,7 @@ export interface SnapResult {
 export interface WorkspaceLayout {
   name: string
   tiles: TileSnapshot[]
+  sections?: Section[]
   canvasZoom: number
   canvasPanX: number
   canvasPanY: number

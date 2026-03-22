@@ -2,13 +2,16 @@
   "name": "sunnyterm",
   "productName": "SunnyTerm",
   "version": "0.1.0",
-  "description": "Infinite canvas terminal emulator - Electron port of SunnyTerm",
+  "description": "Infinite canvas terminal emulator",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "start": "electron-vite dev"
+    "start": "electron-vite dev",
+    "dist": "electron-vite build && electron-builder --mac --arm64 --x64",
+    "dist:arm64": "electron-vite build && electron-builder --mac --arm64",
+    "dist:x64": "electron-vite build && electron-builder --mac --x64"
   },
   "keywords": [
     "terminal",
@@ -16,6 +19,41 @@
     "canvas"
   ],
   "license": "MIT",
+  "build": {
+    "appId": "com.sunnyterm.app",
+    "productName": "SunnyTerm",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "resources/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "SunnyTerm",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
+  },
   "devDependencies": {
     "@electron-toolkit/utils": "^4.0.0",
     "@tailwindcss/postcss": "^4.2.2",
@@ -24,6 +62,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^41.0.3",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.2.2",
