@@ -110,6 +110,8 @@ export interface CanvasStore {
   tileCwds: Record<string, string>
   /** Pending curl data to populate a newly spawned HTTP tile */
   pendingCurlData: Record<string, { method: string; url: string; headers: { key: string; value: string }[]; body: string }>
+  /** Pending URL for a newly spawned browser tile */
+  pendingBrowserUrl: Record<string, string>
 
   // ── Actions ────────────────────────────────────────────────────────────────
   setZoom: (zoom: number) => void
@@ -210,6 +212,7 @@ export const useStore = create<CanvasStore>()(
     activeWorkspace: null,
     tileCwds: {},
     pendingCurlData: {},
+    pendingBrowserUrl: {},
 
     // ── Viewport ─────────────────────────────────────────────────────────────
 

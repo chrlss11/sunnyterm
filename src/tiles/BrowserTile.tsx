@@ -46,6 +46,20 @@ export function BrowserTile({ tileId }: Props) {
   const [canGoForward, setCanGoForward] = useState(false)
   const [hasNavigated, setHasNavigated] = useState(!!existing)
 
+  // Consume pending URL (from link click in terminal/webview)
+  useEffect(() => {
+    const pending = useStore.getState().pendingBrowserUrl[tileId]
+    if (pending) {
+      useStore.setState((s) => {
+        const next = { ...s.pendingBrowserUrl }
+        delete next[tileId]
+        return { pendingBrowserUrl: next }
+      })
+      // Delay to ensure containerRef is ready
+      requestAnimationFrame(() => navigate(pending))
+    }
+  }, [tileId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Normalize URL — add protocol if missing
   const normalizeUrl = useCallback((raw: string): string => {
     const trimmed = raw.trim()

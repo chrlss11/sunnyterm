@@ -48,6 +48,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('menu:action', handler)
   },
 
+  // Subscribe to URL open requests (from link clicks in terminals/webviews)
+  onOpenUrl: (callback: (url: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, url: string) => callback(url)
+    ipcRenderer.on('open-url', handler)
+    return () => ipcRenderer.removeListener('open-url', handler)
+  },
+
   // Workspace operations
   workspaceList: () =>
     ipcRenderer.invoke('workspace:list'),

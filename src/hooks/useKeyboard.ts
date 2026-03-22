@@ -204,6 +204,18 @@ export function useKeyboard() {
     toggleDark, toggleShortcuts, createSection
   ])
 
+  // ── Handle URL open requests from link clicks ────────────────────────────
+
+  useEffect(() => {
+    const cleanup = window.electronAPI.onOpenUrl((url) => {
+      const tile = useStore.getState().spawnTile('browser')
+      useStore.setState((s) => ({
+        pendingBrowserUrl: { ...s.pendingBrowserUrl, [tile.id]: url }
+      }))
+    })
+    return cleanup
+  }, [])
+
   // ── Handle menu actions from main process ─────────────────────────────────
 
   useEffect(() => {

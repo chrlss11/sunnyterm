@@ -172,7 +172,10 @@ function createWindow(): void {
   mainWindow.on('resized', saveBounds)
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    // Send URL to renderer to open in a BrowserTile
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('open-url', url)
+    }
     return { action: 'deny' }
   })
 

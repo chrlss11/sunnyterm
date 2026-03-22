@@ -106,6 +106,9 @@ export interface ElectronAPI {
   // Menu actions from main process
   onMenuAction: (callback: (action: string) => void) => () => void
 
+  // URL open requests (link clicks in terminals/webviews)
+  onOpenUrl: (callback: (url: string) => void) => () => void
+
   // Workspaces
   workspaceList: () => Promise<string[]>
   workspaceSave: (name: string, layout: WorkspaceLayout) => Promise<void>
