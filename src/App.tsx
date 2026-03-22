@@ -89,15 +89,15 @@ function AppInner() {
       {/* Toolbar */}
       <Toolbar />
 
-      {/* Main view — both always mounted, inactive hidden via CSS */}
+      {/* Main view — InfiniteCanvas always mounted (in-flow), FocusView overlays on top */}
       <div className="flex-1 min-h-0 relative">
-        <div className="absolute inset-0" style={{ visibility: viewMode === 'canvas' ? 'visible' : 'hidden' }}>
-          <InfiniteCanvas />
-          <SearchBar />
-        </div>
-        <div className="absolute inset-0" style={{ visibility: viewMode === 'focus' ? 'visible' : 'hidden' }}>
-          <FocusView />
-        </div>
+        <InfiniteCanvas />
+        <SearchBar />
+        {viewMode === 'focus' && (
+          <div className="absolute inset-0 z-10 bg-canvas">
+            <FocusView />
+          </div>
+        )}
       </div>
 
       <Toaster
