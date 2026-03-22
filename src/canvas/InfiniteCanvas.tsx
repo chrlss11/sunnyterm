@@ -515,6 +515,7 @@ function AlignMenu({ x, y, containerRef, onClose }: {
       style={{ position: 'absolute', left: menuX, top: menuY, zIndex: 99999 }}
       className="w-48 rounded-lg border border-border bg-tile shadow-xl py-1"
       onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="px-3 py-1 text-[10px] text-text-muted font-medium uppercase tracking-wider">Align</div>
       <div className={item} onClick={() => handle('left')}><AlignStartVertical size={ico} /> Align Left</div>

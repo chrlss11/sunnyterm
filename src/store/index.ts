@@ -369,9 +369,8 @@ export const useStore = create<CanvasStore>()(
       const { selectedIds, tiles } = get()
       if (selectedIds.length < 2) return
       const sel = tiles.filter((t) => selectedIds.includes(t.id))
-      const GAP = 24
 
-      let updates: Record<string, { x?: number; y?: number }> = {}
+      const updates: Record<string, { x?: number; y?: number }> = {}
 
       switch (direction) {
         case 'left': {
