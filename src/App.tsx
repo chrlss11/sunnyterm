@@ -159,17 +159,17 @@ function Toolbar() {
 
         {expanded && (
           <>
-            <button className={btnLabel} onClick={() => spawnTile('terminal')} title="New Terminal (⌘T)">
-              <Terminal size={ico} /> <span className="text-[11px]">Terminal</span>
+            <button className={btn} onClick={() => spawnTile('terminal')} title="New Terminal (⌘T)">
+              <Terminal size={ico} />
             </button>
-            <button className={btnLabel} onClick={() => spawnTile('http')} title="New HTTP Client (⌘⇧H)">
-              <Globe size={ico} /> <span className="text-[11px]">HTTP</span>
+            <button className={btn} onClick={() => spawnTile('http')} title="New HTTP Client (⌘⇧H)">
+              <Globe size={ico} />
             </button>
-            <button className={btnLabel} onClick={() => spawnTile('postgres')} title="New PostgreSQL Client (⌘⇧P)">
-              <Database size={ico} /> <span className="text-[11px]">DB</span>
+            <button className={btn} onClick={() => spawnTile('postgres')} title="New PostgreSQL Client (⌘⇧P)">
+              <Database size={ico} />
             </button>
-            <button className={btnLabel} onClick={() => spawnTile('browser')} title="New Browser (⌘⇧B)">
-              <Compass size={ico} /> <span className="text-[11px]">Browser</span>
+            <button className={btn} onClick={() => spawnTile('browser')} title="New Browser (⌘⇧B)">
+              <Compass size={ico} />
             </button>
 
             <div className={sep} />
@@ -230,8 +230,8 @@ function Toolbar() {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* View mode toggle */}
-      <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+      {/* View mode toggle — hidden when toolbar is expanded */}
+      {!expanded && <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />}
     </div>
   )
 }

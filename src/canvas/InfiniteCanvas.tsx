@@ -65,6 +65,7 @@ export function InfiniteCanvas() {
   const lassoStart = useRef({ x: 0, y: 0 })
   const [alignMenu, setAlignMenu] = useState<{ x: number; y: number } | null>(null)
   const [createMenu, setCreateMenu] = useState<{ x: number; y: number; canvasX: number; canvasY: number } | null>(null)
+  const rightClickStart = useRef<{ x: number; y: number } | null>(null)
 
   // Convert screen coords to canvas coords (accounting for container offset)
   const toCanvas = useCallback(
@@ -140,6 +141,7 @@ export function InfiniteCanvas() {
 
       // Middle mouse, right-click, or space+left = pan
       if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceHeld.current)) {
+        if (e.button === 2) rightClickStart.current = { x: e.clientX, y: e.clientY }
         isPanning.current = true
         lastMouse.current = { x: e.clientX, y: e.clientY }
         e.currentTarget.setPointerCapture(e.pointerId)
@@ -300,11 +302,19 @@ export function InfiniteCanvas() {
         cancelLinking()
         return
       }
+      // Skip context menu if user dragged (right-click pan)
+      const start = rightClickStart.current
+      rightClickStart.current = null
+      if (start) {
+        const dx = Math.abs(e.clientX - start.x)
+        const dy = Math.abs(e.clientY - start.y)
+        if (dx > 3 || dy > 3) return // was a drag, not a click
+      }
+
       if (selectedIds.length >= 2) {
         setAlignMenu({ x: e.clientX, y: e.clientY })
       } else {
         const canvas = toCanvas(e.clientX, e.clientY)
-        // Only show create menu if right-click is on empty canvas (not on a tile)
         const sorted = [...tiles].sort((a, b) => b.zIndex - a.zIndex)
         const hit = sorted.find((t) => hitTest(canvas.x, canvas.y, t).inTile)
         if (!hit) {
