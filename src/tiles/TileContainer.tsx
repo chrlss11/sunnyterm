@@ -171,7 +171,8 @@ export function TileContainer({ tile, isSelected }: Props) {
         opacity: mounted ? 1 : 0,
         transform: mounted ? 'scale(1)' : 'scale(0.97)',
         transition: 'opacity 150ms ease, transform 150ms ease',
-        transformOrigin: 'top left'
+        transformOrigin: 'top left',
+        contain: 'strict'
       }}
       onMouseDown={() => focusTile(tile.id)}
       onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation() }}

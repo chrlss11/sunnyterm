@@ -181,8 +181,8 @@ export function BrowserTile({ tileId }: Props) {
         </button>
       </form>
 
-      {/* Content */}
-      <div ref={containerRef} className="flex-1 min-h-0 relative">
+      {/* Content — overflow:hidden + isolation:isolate to contain the webview */}
+      <div ref={containerRef} className="flex-1 min-h-0 relative overflow-hidden" style={{ isolation: 'isolate' }}>
         {!hasNavigated && <EmptyState />}
       </div>
     </div>
