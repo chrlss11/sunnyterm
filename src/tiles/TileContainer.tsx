@@ -196,7 +196,6 @@ export function TileContainer({ tile, isSelected }: Props) {
           'bg-tile border',
           borderClass
         ].join(' ')}
-        style={{ willChange: 'transform' }}
       >
         {/* Title bar */}
         <div

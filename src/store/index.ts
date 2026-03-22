@@ -278,27 +278,19 @@ export const useStore = create<CanvasStore>()(
       const tileW = snapToGrid(640)
       const tileH = snapToGrid(396)
 
+      // Calculate position: cascade with small offset from last tile
       let cx: number, cy: number
       if (x != null || y != null) {
-        // Explicit position (e.g. double-click on canvas)
         cx = snapToGrid(x ?? 0)
         cy = snapToGrid(y ?? 0)
-      } else if (viewMode === 'focus' || tiles.length > 0) {
-        // In focus mode or when tiles exist: place near existing tiles in a grid
-        // Find the bounding box of existing tiles and place below/right
-        if (tiles.length === 0) {
-          cx = snapToGrid(60)
-          cy = snapToGrid(60)
-        } else {
-          const minX = Math.min(...tiles.map((t) => t.x))
-          const maxY = Math.max(...tiles.map((t) => t.y + t.h))
-          cx = snapToGrid(minX)
-          cy = snapToGrid(maxY + 36)
-        }
       } else {
-        // Canvas mode, no tiles: center of viewport
-        cx = snapToGrid((window.innerWidth / 2 - panX) / zoom - tileW / 2)
-        cy = snapToGrid((window.innerHeight / 2 - panY) / zoom - tileH / 2)
+        // Place near the viewport center, cascading from existing tiles
+        const vpCenterX = (window.innerWidth / 2 - panX) / zoom - tileW / 2
+        const vpCenterY = ((window.innerHeight - 44) / 2 - panY) / zoom - tileH / 2
+        const CASCADE = 36
+        const offset = tiles.length * CASCADE
+        cx = snapToGrid(vpCenterX + (offset % (CASCADE * 8)))
+        cy = snapToGrid(vpCenterY + (offset % (CASCADE * 8)))
       }
       const { x: safeX, y: safeY } = findFreePosition(tiles, cx, cy, tileW, tileH)
       const tile: Tile = {

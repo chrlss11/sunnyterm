@@ -53,10 +53,7 @@ export function InfiniteCanvas() {
     setSelectedIds, clearSelection
   } = useStore()
 
-  const viewMode = useStore((s) => s.viewMode)
-
   const containerRef = useRef<HTMLDivElement>(null)
-  const prevViewMode = useRef(viewMode)
   const isPanning = useRef(false)
   const spaceHeld = useRef(false)
   const lastMouse = useRef({ x: 0, y: 0 })
@@ -102,31 +99,6 @@ export function InfiniteCanvas() {
       window.removeEventListener('keyup', onKeyUp)
     }
   }, [])
-
-  // ── Force compositor repaint when returning from Focus mode ──────────────
-  // Chromium discards GPU textures for occluded layers. When the FocusView
-  // overlay unmounts, the canvas layers have stale textures. We force two
-  // distinct compositor states: a 1px pan nudge + translateZ hack, then
-  // restore on the next frame.
-
-  useEffect(() => {
-    if (prevViewMode.current === 'focus' && viewMode === 'canvas') {
-      const el = containerRef.current
-      // Phase 1: nudge pan + force layer rebuild
-      panBy(1, 0)
-      if (el) el.style.transform = 'translateZ(0.1px)'
-
-      const raf = requestAnimationFrame(() => {
-        // Phase 2: restore — two real compositor states guarantee repaint
-        panBy(-1, 0)
-        if (el) el.style.transform = ''
-      })
-
-      prevViewMode.current = viewMode
-      return () => cancelAnimationFrame(raf)
-    }
-    prevViewMode.current = viewMode
-  }, [viewMode, panBy])
 
   // ── Paste curl detection ──────────────────────────────────────────────────
 
@@ -346,7 +318,7 @@ export function InfiniteCanvas() {
       onContextMenu={onContextMenu}
       onMouseMove={(e) => setMouseScreen({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setMouseScreen(null)}
-      style={{ touchAction: 'none', isolation: 'isolate' }}
+      style={{ touchAction: 'none' }}
     >
       {/* Dot grid (screen-space, not affected by canvas scale) */}
       <div
@@ -354,9 +326,7 @@ export function InfiniteCanvas() {
         style={{
           backgroundImage: `radial-gradient(circle at center, ${dotColor} 1px, transparent 1px)`,
           backgroundSize: `${gridSpacing}px ${gridSpacing}px`,
-          backgroundPosition: `${panX % gridSpacing}px ${panY % gridSpacing}px`,
-          willChange: 'transform',
-          zIndex: 0
+          backgroundPosition: `${panX % gridSpacing}px ${panY % gridSpacing}px`
         }}
       />
 
@@ -388,9 +358,7 @@ export function InfiniteCanvas() {
         style={{
           position: 'absolute',
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-          transformOrigin: '0 0',
-          willChange: 'transform',
-          zIndex: 1
+          transformOrigin: '0 0'
         }}
       >
 
