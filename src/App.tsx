@@ -4,7 +4,8 @@ import { SearchBar } from './search/SearchBar'
 import { WorkspacePicker } from './workspace/WorkspacePicker'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useStore, DEFAULT_WORKSPACE } from './store'
-import { Terminal, Globe, Database, Undo2, Redo2, Map, Search, Sun, Moon, ZoomIn, ZoomOut, FolderOpen } from 'lucide-react'
+import { Terminal, Globe, Database, Undo2, Redo2, Map, Search, Sun, Moon, ZoomIn, ZoomOut, FolderOpen, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Toaster } from 'sonner'
 
 // ── Auto-save debounce (ms) ───────────────────────────────────────────────────
 const AUTO_SAVE_DEBOUNCE_MS = 2_000
@@ -20,7 +21,6 @@ function AppInner() {
   const isDark = useStore((s) => s.isDark)
   const showShortcuts = useStore((s) => s.showShortcuts)
   const showConfirmClear = useStore((s) => s.showConfirmClear)
-  const savedToast = useStore((s) => s.savedToast)
   const focusedId = useStore((s) => s.focusedId)
   const tiles = useStore((s) => s.tiles)
   const { initFromPersisted, toggleShortcuts, toggleConfirmClear, clearCanvas } = useStore()
@@ -92,12 +92,11 @@ function AppInner() {
         <SearchBar />
       </div>
 
-      {/* Save toast */}
-      {savedToast && (
-        <div className="fixed bottom-4 right-4 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded shadow-lg pointer-events-none z-[99999] transition-opacity">
-          Saved ✓
-        </div>
-      )}
+      <Toaster
+        position="bottom-right"
+        theme={isDark ? 'dark' : 'light'}
+        toastOptions={{ style: { fontSize: '13px' } }}
+      />
 
       {/* Confirm clear canvas modal */}
       {showConfirmClear && (
@@ -125,6 +124,7 @@ function Toolbar() {
   const showMinimap = useStore((s) => s.showMinimap)
   const isDark = useStore((s) => s.isDark)
   const zoom = useStore((s) => s.zoom)
+  const [expanded, setExpanded] = React.useState(false)
 
   const ico = 14
   const btn = 'p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/8 transition-colors flex items-center gap-1.5'
@@ -152,55 +152,67 @@ function Toolbar() {
 
         <div className={sep} />
 
-        <button className={btn} onClick={undo} disabled={undoStack.length === 0} title="Undo (⌘Z)">
-          <Undo2 size={ico} />
-        </button>
-        <button className={btn} onClick={redo} disabled={redoStack.length === 0} title="Redo (⌘⇧Z)">
-          <Redo2 size={ico} />
-        </button>
-
-        <div className={sep} />
-
-        <button
-          className={`${btn} ${showMinimap ? 'text-blue-400' : ''}`}
-          onClick={toggleMinimap}
-          title="Toggle Minimap (⌘M)"
-        >
-          <Map size={ico} />
-        </button>
-        <button className={btn} onClick={toggleSearch} title="Search (⌘F)">
-          <Search size={ico} />
-        </button>
-
-        <div className={sep} />
-
-        <button className={btn} onClick={zoomOut} title="Zoom out (⌘-)">
-          <ZoomOut size={ico} />
-        </button>
-        <button
-          className={`${btn} font-mono tabular-nums min-w-[42px] justify-center text-[11px]`}
-          onClick={resetView}
-          title="Reset zoom (⌘0)"
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-        <button className={btn} onClick={zoomIn} title="Zoom in (⌘+)">
-          <ZoomIn size={ico} />
-        </button>
-
-        <div className={sep} />
-
         <button
           className={btn}
-          onClick={toggleDark}
-          title={isDark ? 'Light mode (⌘⇧D)' : 'Dark mode (⌘⇧D)'}
+          onClick={() => setExpanded((v) => !v)}
+          title={expanded ? 'Collapse toolbar' : 'Expand toolbar'}
         >
-          {isDark ? <Sun size={ico} /> : <Moon size={ico} />}
+          {expanded ? <ChevronLeft size={ico} /> : <ChevronRight size={ico} />}
         </button>
 
-        <div className={sep} />
+        {expanded && (
+          <>
+            <button className={btn} onClick={undo} disabled={undoStack.length === 0} title="Undo (⌘Z)">
+              <Undo2 size={ico} />
+            </button>
+            <button className={btn} onClick={redo} disabled={redoStack.length === 0} title="Redo (⌘⇧Z)">
+              <Redo2 size={ico} />
+            </button>
 
-        <WorkspacePicker />
+            <div className={sep} />
+
+            <button
+              className={`${btn} ${showMinimap ? 'text-blue-400' : ''}`}
+              onClick={toggleMinimap}
+              title="Toggle Minimap (⌘M)"
+            >
+              <Map size={ico} />
+            </button>
+            <button className={btn} onClick={toggleSearch} title="Search (⌘F)">
+              <Search size={ico} />
+            </button>
+
+            <div className={sep} />
+
+            <button className={btn} onClick={zoomOut} title="Zoom out (⌘-)">
+              <ZoomOut size={ico} />
+            </button>
+            <button
+              className={`${btn} font-mono tabular-nums min-w-[42px] justify-center text-[11px]`}
+              onClick={resetView}
+              title="Reset zoom (⌘0)"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button className={btn} onClick={zoomIn} title="Zoom in (⌘+)">
+              <ZoomIn size={ico} />
+            </button>
+
+            <div className={sep} />
+
+            <button
+              className={btn}
+              onClick={toggleDark}
+              title={isDark ? 'Light mode (⌘⇧D)' : 'Dark mode (⌘⇧D)'}
+            >
+              {isDark ? <Sun size={ico} /> : <Moon size={ico} />}
+            </button>
+
+            <div className={sep} />
+
+            <WorkspacePicker />
+          </>
+        )}
       </div>
     </div>
   )

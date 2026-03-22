@@ -34,11 +34,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ],
       "hardenedRuntime": true,
@@ -47,8 +53,16 @@
     "dmg": {
       "title": "SunnyTerm",
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   },
@@ -80,7 +94,8 @@
   "dependencies": {
     "electron-store": "^8.2.0",
     "node-pty": "^1.1.0",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "sonner": "^2.0.7"
   },
   "type": "module"
 }

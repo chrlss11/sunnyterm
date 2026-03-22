@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
+import { toast } from 'sonner'
 import type { Tile, TileKind, CanvasAction, DragState, Section, WorkspaceLayout, PersistedAppState } from '../types'
 const GRID_SNAP = 12 // half of GRID_SPACING (24)
 const TILE_MIN_W = 300
@@ -506,8 +507,7 @@ export const useStore = create<CanvasStore>()(
     },
 
     triggerSavedToast: () => {
-      set({ savedToast: true })
-      setTimeout(() => set({ savedToast: false }), 2000)
+      toast.success('Saved')
     },
 
     markTileExited: (id) =>
@@ -522,11 +522,18 @@ export const useStore = create<CanvasStore>()(
 
     // ── Linking ───────────────────────────────────────────────────────────────
 
-    startLinking: (fromId) => set({ linkingFromId: fromId }),
-    cancelLinking: () => set({ linkingFromId: null }),
+    startLinking: (fromId) => {
+      set({ linkingFromId: fromId })
+      toast('Click a tile to link output', { id: 'linking', duration: Infinity })
+    },
+    cancelLinking: () => {
+      set({ linkingFromId: null })
+      toast.dismiss('linking')
+    },
 
     completeLinking: (toId) => {
       const { linkingFromId } = get()
+      toast.dismiss('linking')
       if (!linkingFromId || linkingFromId === toId) {
         set({ linkingFromId: null })
         return
@@ -537,6 +544,7 @@ export const useStore = create<CanvasStore>()(
         ),
         linkingFromId: null
       }))
+      toast.success('Output linked')
     },
 
     unlinkTile: (id) => {

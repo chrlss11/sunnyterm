@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { TerminalTile } from './TerminalTile'
 import { HttpTile } from './HttpTile'
 import { PostgresTile } from './PostgresTile'
+import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal } from 'lucide-react'
 import type { Tile } from '../types'
 
 export const TITLE_BAR_H = 28
@@ -55,8 +56,9 @@ export function TileContainer({ tile, isSelected }: Props) {
   const renameInputRef = useRef<HTMLInputElement>(null)
 
   // Context menu state
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const [ctxMenuOpen, setCtxMenuOpen] = useState(false)
   const ctxMenuRef = useRef<HTMLDivElement>(null)
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
 
   // Mount animation state
   const [mounted, setMounted] = useState(false)
@@ -67,15 +69,18 @@ export function TileContainer({ tile, isSelected }: Props) {
 
   // Close context menu on outside click
   useEffect(() => {
-    if (!ctxMenu) return
+    if (!ctxMenuOpen) return
     const handleClick = (e: MouseEvent) => {
-      if (ctxMenuRef.current && !ctxMenuRef.current.contains(e.target as Node)) {
-        setCtxMenu(null)
+      if (
+        ctxMenuRef.current && !ctxMenuRef.current.contains(e.target as Node) &&
+        menuBtnRef.current && !menuBtnRef.current.contains(e.target as Node)
+      ) {
+        setCtxMenuOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [ctxMenu])
+  }, [ctxMenuOpen])
 
   const handleTitleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -105,13 +110,13 @@ export function TileContainer({ tile, isSelected }: Props) {
     (e: React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      setCtxMenu({ x: e.clientX, y: e.clientY })
+      setCtxMenuOpen(true)
     },
     []
   )
 
   const handleDuplicate = useCallback(() => {
-    setCtxMenu(null)
+    setCtxMenuOpen(false)
     const newTile = spawnTile(tile.kind, tile.x + 30, tile.y + 30)
     if (tile.userRenamed) {
       renameTile(newTile.id, tile.name + ' (copy)')
@@ -119,31 +124,31 @@ export function TileContainer({ tile, isSelected }: Props) {
   }, [tile, spawnTile, renameTile])
 
   const handleCopyCwd = useCallback(async () => {
-    setCtxMenu(null)
+    setCtxMenuOpen(false)
     if (tile.kind !== 'terminal') return
     const cwd = await window.electronAPI.ptyGetCwd(tile.id)
     if (cwd) navigator.clipboard.writeText(cwd)
   }, [tile.id, tile.kind])
 
   const handleRestartTerminal = useCallback(() => {
-    setCtxMenu(null)
+    setCtxMenuOpen(false)
     document.dispatchEvent(new CustomEvent('restart-terminal', { detail: { tileId: tile.id } }))
   }, [tile.id])
 
   const handleLinkOutput = useCallback(() => {
-    setCtxMenu(null)
+    setCtxMenuOpen(false)
     startLinking(tile.id)
   }, [tile.id, startLinking])
 
   const handleRenameCtx = useCallback(() => {
-    setCtxMenu(null)
+    setCtxMenuOpen(false)
     setRenameValue(tile.name)
     setIsRenaming(true)
     setTimeout(() => renameInputRef.current?.select(), 0)
   }, [tile.name])
 
   const handleClose = useCallback(() => {
-    setCtxMenu(null)
+    setCtxMenuOpen(false)
     removeTile(tile.id)
   }, [tile.id, removeTile])
 
@@ -168,6 +173,7 @@ export function TileContainer({ tile, isSelected }: Props) {
         transformOrigin: 'top left'
       }}
       onMouseDown={() => focusTile(tile.id)}
+      onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation() }}
     >
       {/* Drop shadow / border */}
       <div
@@ -210,13 +216,17 @@ export function TileContainer({ tile, isSelected }: Props) {
             <span className="text-yellow-400 text-xs" title="Output linked">⇒</span>
           )}
 
-          {/* Close button */}
+          {/* Menu button */}
           <button
-            className="hover:text-red-400 flex items-center justify-center transition-colors ml-auto"
-            onClick={(e) => { e.stopPropagation(); removeTile(tile.id) }}
+            ref={menuBtnRef}
+            className="flex items-center justify-center transition-colors ml-auto"
+            onClick={(e) => {
+              e.stopPropagation()
+              setCtxMenuOpen((v) => !v)
+            }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <span className="text-text-muted hover:text-red-400 text-lg leading-none">×</span>
+            <MoreHorizontal size={14} className="text-text-muted hover:text-text-primary" />
           </button>
         </div>
 
@@ -242,11 +252,9 @@ export function TileContainer({ tile, isSelected }: Props) {
       </div>
 
       {/* Context menu */}
-      {ctxMenu && (
+      {ctxMenuOpen && (
         <ContextMenu
           ref={ctxMenuRef}
-          x={ctxMenu.x}
-          y={ctxMenu.y}
           tile={tile}
           onRename={handleRenameCtx}
           onDuplicate={handleDuplicate}
@@ -263,8 +271,6 @@ export function TileContainer({ tile, isSelected }: Props) {
 // ── Context menu ──────────────────────────────────────────────────────────────
 
 interface CtxMenuProps {
-  x: number
-  y: number
   tile: Tile
   onRename: () => void
   onDuplicate: () => void
@@ -275,38 +281,32 @@ interface CtxMenuProps {
 }
 
 const ContextMenu = React.forwardRef<HTMLDivElement, CtxMenuProps>(function ContextMenu(
-  { x, y, tile, onRename, onDuplicate, onClose, onRestartTerminal, onCopyCwd, onLinkOutput },
+  { tile, onRename, onDuplicate, onClose, onRestartTerminal, onCopyCwd, onLinkOutput },
   ref
 ) {
   const item = 'flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors'
   const sep = 'my-0.5 border-t border-border'
-
-  const style: React.CSSProperties = {
-    position: 'fixed',
-    left: Math.min(x, window.innerWidth - 160),
-    top: Math.min(y, window.innerHeight - 200),
-    zIndex: 99999
-  }
+  const iconSize = 12
 
   return (
     <div
       ref={ref}
-      style={style}
+      style={{ position: 'absolute', right: 0, top: TITLE_BAR_H, zIndex: 99999 }}
       className="w-40 rounded border border-border bg-tile shadow-xl py-1"
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <div className={item} onClick={onRename}>✏ Rename</div>
-      <div className={item} onClick={onDuplicate}>⧉ Duplicate</div>
+      <div className={item} onClick={onRename}><Pencil size={iconSize} /> Rename</div>
+      <div className={item} onClick={onDuplicate}><Copy size={iconSize} /> Duplicate</div>
       <div className={sep} />
       {tile.kind === 'terminal' && (
         <>
-          <div className={item} onClick={onRestartTerminal}>↺ Restart Terminal</div>
-          <div className={item} onClick={onCopyCwd}>📋 Copy CWD</div>
+          <div className={item} onClick={onRestartTerminal}><RotateCcw size={iconSize} /> Restart</div>
+          <div className={item} onClick={onCopyCwd}><ClipboardCopy size={iconSize} /> Copy CWD</div>
         </>
       )}
-      <div className={item} onClick={onLinkOutput}>⇒ Link Output</div>
+      <div className={item} onClick={onLinkOutput}><Link size={iconSize} /> Link Output</div>
       <div className={sep} />
-      <div className={`${item} hover:text-red-400`} onClick={onClose}>✕ Close</div>
+      <div className={`${item} hover:!text-red-400`} onClick={onClose}><X size={iconSize} /> Close</div>
     </div>
   )
 })

@@ -15,24 +15,24 @@ function hitTest(
   canvasX: number,
   canvasY: number,
   tile: { x: number; y: number; w: number; h: number }
-): { inTitle: boolean; inResize: boolean; inClose: boolean; inTile: boolean } {
+): { inTitle: boolean; inResize: boolean; inMenu: boolean; inTile: boolean } {
   const inTile =
     canvasX >= tile.x &&
     canvasX <= tile.x + tile.w &&
     canvasY >= tile.y &&
     canvasY <= tile.y + tile.h
 
-  if (!inTile) return { inTitle: false, inResize: false, inClose: false, inTile: false }
+  if (!inTile) return { inTitle: false, inResize: false, inMenu: false, inTile: false }
 
   const inTitle = canvasY <= tile.y + TITLE_BAR_H
   const inResize =
     canvasX >= tile.x + tile.w - RESIZE_HANDLE &&
     canvasY >= tile.y + tile.h - RESIZE_HANDLE
-  const inClose =
+  const inMenu =
     canvasX >= tile.x + tile.w - TITLE_BAR_H &&
     canvasY <= tile.y + TITLE_BAR_H
 
-  return { inTitle, inResize, inClose, inTile }
+  return { inTitle, inResize, inMenu, inTile }
 }
 
 export function InfiniteCanvas() {
@@ -175,8 +175,8 @@ export function InfiniteCanvas() {
       focusTile(hit.id)
       const r = hitTest(canvas.x, canvas.y, hit)
 
-      if (r.inClose) {
-        removeTile(hit.id)
+      if (r.inMenu) {
+        // Handled by the TileContainer menu button
         return
       }
 
@@ -396,12 +396,6 @@ export function InfiniteCanvas() {
       {/* Minimap (fixed overlay, not affected by canvas transform) */}
       {showMinimap && <Minimap />}
 
-      {/* Linking mode indicator */}
-      {linkingFromId && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500/90 text-black text-sm font-medium px-3 py-1 rounded-full pointer-events-none">
-          Click a tile to link output → right-click or Escape to cancel
-        </div>
-      )}
     </div>
   )
 }
