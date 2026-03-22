@@ -44,13 +44,8 @@ export function useKeyboard() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const meta = e.metaKey
 
-      // Ctrl+Tab — toggle canvas/focus view
-      if (e.key === 'Tab' && e.ctrlKey && !e.altKey && !meta) {
-        e.preventDefault()
-        const { viewMode, setViewMode } = useStore.getState()
-        setViewMode(viewMode === 'canvas' ? 'focus' : 'canvas')
-        return
-      }
+      // Ctrl+Tab — toggle canvas/focus view (capture phase handles this below)
+
 
       if (e.key === 'Escape') {
         if (linkingFromId) cancelLinking()
@@ -201,8 +196,22 @@ export function useKeyboard() {
       }
     }
 
+    // Ctrl+Tab in capture phase — fires before xterm can consume the event
+    const handleCtrlTab = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' && e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault()
+        e.stopPropagation()
+        const { viewMode, setViewMode } = useStore.getState()
+        setViewMode(viewMode === 'canvas' ? 'focus' : 'canvas')
+      }
+    }
+
+    window.addEventListener('keydown', handleCtrlTab, true) // capture phase
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleCtrlTab, true)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
   }, [
     focusedId, linkingFromId, workspaces,
     spawnTile, removeTile, undo, redo,
