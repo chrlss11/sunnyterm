@@ -318,7 +318,7 @@ export function InfiniteCanvas() {
       onContextMenu={onContextMenu}
       onMouseMove={(e) => setMouseScreen({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setMouseScreen(null)}
-      style={{ touchAction: 'none' }}
+      style={{ touchAction: 'none', isolation: 'isolate' }}
     >
       {/* Dot grid (screen-space, not affected by canvas scale) */}
       <div
@@ -326,7 +326,9 @@ export function InfiniteCanvas() {
         style={{
           backgroundImage: `radial-gradient(circle at center, ${dotColor} 1px, transparent 1px)`,
           backgroundSize: `${gridSpacing}px ${gridSpacing}px`,
-          backgroundPosition: `${panX % gridSpacing}px ${panY % gridSpacing}px`
+          backgroundPosition: `${panX % gridSpacing}px ${panY % gridSpacing}px`,
+          willChange: 'transform',
+          zIndex: 0
         }}
       />
 
@@ -358,7 +360,9 @@ export function InfiniteCanvas() {
         style={{
           position: 'absolute',
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-          transformOrigin: '0 0'
+          transformOrigin: '0 0',
+          willChange: 'transform',
+          zIndex: 1
         }}
       >
 
