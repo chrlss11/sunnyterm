@@ -53,17 +53,7 @@ export function TileContainer({ tile, isSelected }: Props) {
   const isFocused = focusedId === tile.id
   const isExited = exitedTileIds.includes(tile.id)
 
-  // Delay content remount by one frame after switching to canvas mode
-  // so the compositor layers are established before webview/xterm mount
-  const [contentReady, setContentReady] = useState(viewMode === 'canvas')
-  useEffect(() => {
-    if (viewMode === 'canvas') {
-      const raf = requestAnimationFrame(() => setContentReady(true))
-      return () => cancelAnimationFrame(raf)
-    } else {
-      setContentReady(false)
-    }
-  }, [viewMode])
+  const showContent = viewMode === 'canvas'
 
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(tile.name)
@@ -247,7 +237,7 @@ export function TileContainer({ tile, isSelected }: Props) {
         {/* Content area — skip rendering when canvas is hidden (focus mode)
             to avoid competing with FocusView for xterm/webview elements */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {contentReady && (
+          {showContent && (
             <TileErrorBoundary tileId={tile.id}>
               {tile.kind === 'terminal' && <TerminalTile tileId={tile.id} />}
               {tile.kind === 'http' && <HttpTile tileId={tile.id} />}
