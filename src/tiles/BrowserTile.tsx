@@ -39,16 +39,17 @@ export function BrowserTile({ tileId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
 
-  const tiles = useStore((s) => s.tiles)
-  const tile = tiles.find((t) => t.id === tileId)
   const existing = browserRegistry.get(tileId)
-  const initUrl = tile?.initialUrl ?? null
+  // Read initialUrl once on mount — no need to subscribe to tile changes
+  const initUrl = useRef(
+    existing?.currentUrl ?? useStore.getState().tiles.find((t) => t.id === tileId)?.initialUrl ?? null
+  ).current
 
-  const [inputValue, setInputValue] = useState(existing?.currentUrl ?? initUrl ?? '')
+  const [inputValue, setInputValue] = useState(initUrl ?? '')
   const [isLoading, setIsLoading] = useState(false)
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
-  const [hasNavigated, setHasNavigated] = useState(!!existing || !!initUrl)
+  const [hasNavigated, setHasNavigated] = useState(!!initUrl)
 
   // Normalize URL — add protocol if missing
   const normalizeUrl = useCallback((raw: string): string => {
