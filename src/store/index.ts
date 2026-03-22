@@ -409,12 +409,9 @@ export const useStore = create<CanvasStore>()(
         }
         case 'h-distribute': {
           const sorted = [...sel].sort((a, b) => a.x - b.x)
-          const totalW = sorted.reduce((s, t) => s + t.w, 0)
-          const minX = sorted[0].x
-          const maxRight = sorted[sorted.length - 1].x + sorted[sorted.length - 1].w
-          const space = maxRight - minX - totalW
-          const gap = space / (sorted.length - 1)
-          let cx = minX
+          const startX = sorted[0].x
+          const gap = 24
+          let cx = startX
           sorted.forEach((t) => {
             updates[t.id] = { x: snapToGrid(cx) }
             cx += t.w + gap
@@ -423,12 +420,9 @@ export const useStore = create<CanvasStore>()(
         }
         case 'v-distribute': {
           const sorted = [...sel].sort((a, b) => a.y - b.y)
-          const totalH = sorted.reduce((s, t) => s + t.h, 0)
-          const minY = sorted[0].y
-          const maxBottom = sorted[sorted.length - 1].y + sorted[sorted.length - 1].h
-          const space = maxBottom - minY - totalH
-          const gap = space / (sorted.length - 1)
-          let cy = minY
+          const startY = sorted[0].y
+          const gap = 24
+          let cy = startY
           sorted.forEach((t) => {
             updates[t.id] = { y: snapToGrid(cy) }
             cy += t.h + gap
