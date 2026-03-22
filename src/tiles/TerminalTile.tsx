@@ -93,6 +93,7 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
   const tiles = useStore((s) => s.tiles)
   const isDark = useStore((s) => s.isDark)
   const zoom = useStore((s) => s.zoom)
+  const focusedId = useStore((s) => s.focusedId)
   isDarkRef.current = isDark
 
   const tile = tiles.find((t) => t.id === tileId)
@@ -375,6 +376,14 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
       fitAddonRef.current = null
     }
   }, [tileId, instanceKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-focus terminal when this tile becomes focused ──────────────────────
+
+  useEffect(() => {
+    if (focusedId === tileId && termRef.current) {
+      termRef.current.focus()
+    }
+  }, [focusedId, tileId])
 
   // ── Keep outputLink ref in sync on registry entry ──────────────────────────
 

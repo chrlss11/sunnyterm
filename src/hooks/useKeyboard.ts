@@ -206,10 +206,30 @@ export function useKeyboard() {
       }
     }
 
+    // Cmd+Arrow in capture phase — cycle tiles in focus mode even when terminal is focused
+    const handleCtrlArrow = (e: KeyboardEvent) => {
+      if (!e.metaKey || e.altKey || e.ctrlKey) return
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+
+      const { viewMode, tiles, focusedId: fid, focusTile: focus } = useStore.getState()
+      if (viewMode !== 'focus' || tiles.length <= 1) return
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      const idx = tiles.findIndex((t) => t.id === fid)
+      const next = e.key === 'ArrowRight'
+        ? (idx + 1) % tiles.length
+        : (idx - 1 + tiles.length) % tiles.length
+      focus(tiles[next].id)
+    }
+
     window.addEventListener('keydown', handleCtrlTab, true) // capture phase
+    window.addEventListener('keydown', handleCtrlArrow, true) // capture phase
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleCtrlTab, true)
+      window.removeEventListener('keydown', handleCtrlArrow, true)
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [
