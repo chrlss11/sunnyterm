@@ -80,9 +80,12 @@ export interface WorkspaceLayout {
 
 // ─── App state (persisted) ────────────────────────────────────────────────────
 
+export type ViewMode = 'canvas' | 'focus'
+
 export interface PersistedAppState {
   isDark: boolean
   lastWorkspace: string | null
+  viewMode?: ViewMode
   windowBounds?: { x: number; y: number; width: number; height: number }
 }
 

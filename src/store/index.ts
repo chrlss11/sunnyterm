@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
 import { toast } from 'sonner'
-import type { Tile, TileKind, CanvasAction, DragState, Section, WorkspaceLayout, PersistedAppState } from '../types'
+import type { Tile, TileKind, CanvasAction, DragState, Section, WorkspaceLayout, PersistedAppState, ViewMode } from '../types'
 const GRID_SNAP = 12 // half of GRID_SPACING (24)
 const TILE_MIN_W = 300
 const TILE_MIN_H = 180
@@ -62,6 +62,9 @@ export interface CanvasStore {
   // Dark mode
   isDark: boolean
 
+  // View mode
+  viewMode: ViewMode
+
   // UI state
   showShortcuts: boolean
   showConfirmClear: boolean
@@ -121,6 +124,7 @@ export interface CanvasStore {
   redo: () => void
 
   toggleDark: () => void
+  setViewMode: (mode: ViewMode) => void
   toggleShortcuts: () => void
   toggleConfirmClear: () => void
   clearCanvas: () => void
@@ -165,6 +169,7 @@ export const useStore = create<CanvasStore>()(
     undoStack: [],
     redoStack: [],
     isDark: true,
+    viewMode: 'canvas' as ViewMode,
     showShortcuts: false,
     showConfirmClear: false,
     savedToast: false,
@@ -582,10 +587,18 @@ export const useStore = create<CanvasStore>()(
     toggleDark: () => {
       const newDark = !get().isDark
       set({ isDark: newDark })
-      // Persist dark mode change immediately (merge, preserving windowBounds etc.)
       window.electronAPI.appStateSave({
         isDark: newDark,
         lastWorkspace: get().activeWorkspace
+      })
+    },
+
+    setViewMode: (viewMode) => {
+      set({ viewMode })
+      window.electronAPI.appStateSave({
+        isDark: get().isDark,
+        lastWorkspace: get().activeWorkspace,
+        viewMode
       })
     },
 
@@ -705,7 +718,7 @@ export const useStore = create<CanvasStore>()(
     initFromPersisted: async () => {
       const appState = await window.electronAPI.appStateLoad()
       if (appState) {
-        set({ isDark: appState.isDark })
+        set({ isDark: appState.isDark, viewMode: appState.viewMode ?? 'canvas' })
       }
 
       const all = await window.electronAPI.workspaceList()

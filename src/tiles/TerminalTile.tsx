@@ -7,7 +7,8 @@ import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { useStore } from '../store'
 import { TITLE_BAR_H } from './TileContainer'
-import { registerTerminal, unregisterTerminal } from '../lib/terminalRegistry'
+import { registerTerminal, unregisterTerminal, getTerminalEntry } from '../lib/terminalRegistry'
+import type { TerminalEntry } from '../lib/terminalRegistry'
 import { stripAnsi } from '../lib/stripAnsi'
 
 // ── Terminal themes ────────────────────────────────────────────────────────────
@@ -64,18 +65,15 @@ const lightTheme = {
 
 interface Props {
   tileId: string
+  /** Override dimensions for non-canvas views (focus mode) */
+  overrideW?: number
+  overrideH?: number
 }
 
-export function TerminalTile({ tileId }: Props) {
+export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
-  const cleanupPtyRef = useRef<(() => void) | null>(null)
-  const cleanupExitRef = useRef<(() => void) | null>(null)
-  // Ref so onData callback always sees current exit state without closure capture
-  const isExitedRef = useRef(false)
-  // CWD to restore on restart
-  const savedCwdRef = useRef<string | undefined>(undefined)
   // Track current isDark for terminal init effect (avoids re-running on theme change)
   const isDarkRef = useRef(true)
 
@@ -95,13 +93,63 @@ export function TerminalTile({ tileId }: Props) {
 
   const { autoRenameTile, consumeTileCwd, markTileExited, markTileAlive } = useStore()
 
-  // ── Terminal + PTY init (re-runs on instanceKey change for restart) ────────
+  // ── Terminal + PTY init ────────────────────────────────────────────────────
+  // On first mount: create xterm + PTY. On view switch: reattach existing xterm DOM.
+  // On restart (instanceKey > 0): dispose old, create fresh.
 
   useEffect(() => {
     if (!containerRef.current) return
 
-    isExitedRef.current = false
+    // Check if we have a persistent xterm instance for this tile
+    const existing = getTerminalEntry(tileId)
+
+    if (existing && instanceKey === 0) {
+      // ── Reattach existing xterm DOM element (view switch) ──────────────
+      containerRef.current.appendChild(existing.element)
+      termRef.current = existing.terminal
+      fitAddonRef.current = existing.fitAddon
+
+      // Restore exit state
+      if (existing.isExited) {
+        setExitInfo({ code: existing.exitCode! })
+      } else {
+        setExitInfo(null)
+      }
+
+      // Sync outputLink ref
+      existing.outputLink = tile?.outputLink ?? null
+
+      return () => {
+        // On unmount: detach DOM but keep xterm alive
+        if (existing.element.parentNode === containerRef.current) {
+          containerRef.current!.removeChild(existing.element)
+        }
+        termRef.current = null
+        fitAddonRef.current = null
+      }
+    }
+
+    // ── Create new xterm instance (first mount or restart) ──────────────
+
+    // If restarting, fully dispose the old instance
+    if (instanceKey > 0) {
+      const old = getTerminalEntry(tileId)
+      if (old) {
+        old.cleanupPty?.()
+        old.cleanupExit?.()
+        window.electronAPI.ptyKill(tileId)
+        old.terminal.dispose()
+        unregisterTerminal(tileId)
+      }
+    }
+
     setExitInfo(null)
+
+    // Create a detached wrapper div for xterm to render into
+    const xtermElement = document.createElement('div')
+    xtermElement.style.width = '100%'
+    xtermElement.style.height = '100%'
+    containerRef.current.appendChild(xtermElement)
 
     const term = new Terminal({
       theme: isDarkRef.current ? darkTheme : lightTheme,
@@ -123,7 +171,7 @@ export function TerminalTile({ tileId }: Props) {
     term.loadAddon(webLinksAddon)
     term.loadAddon(searchAddon)
 
-    term.open(containerRef.current)
+    term.open(xtermElement)
 
     // Resize terminal to match tile dimensions immediately, before PTY spawn
     const initCols = tileCols(tile?.w ?? 640)
@@ -133,15 +181,25 @@ export function TerminalTile({ tileId }: Props) {
     termRef.current = term
     fitAddonRef.current = fitAddon
 
-    registerTerminal(tileId, searchAddon)
-
-    // Title changes from the shell are ignored — tiles keep their numbered names
-    // Users can rename via double-click or context menu
+    // Create registry entry
+    const entry: TerminalEntry = {
+      searchAddon,
+      terminal: term,
+      fitAddon,
+      element: xtermElement,
+      cleanupPty: null,
+      cleanupExit: null,
+      isExited: false,
+      exitCode: null,
+      savedCwd: undefined,
+      outputLink: tile?.outputLink ?? null
+    }
+    registerTerminal(tileId, entry)
 
     // Determine CWD: use workspace-restored CWD on first mount, saved CWD on restart
     const cwd = instanceKey === 0
       ? (consumeTileCwd(tileId) ?? undefined)
-      : savedCwdRef.current
+      : entry.savedCwd
 
     markTileAlive(tileId)
 
@@ -149,22 +207,23 @@ export function TerminalTile({ tileId }: Props) {
     const subscribePty = () => {
       const cleanup = window.electronAPI.onPtyData(tileId, (data) => {
         term.write(data)
-        const link = outputLinkRef.current
+        const link = entry.outputLink
         if (link) {
           const clean = stripAnsi(data)
           if (clean) window.electronAPI.ptyWrite(link, clean)
         }
       })
-      cleanupPtyRef.current = cleanup
+      entry.cleanupPty = cleanup
 
       const cleanupExit = window.electronAPI.onPtyExit(tileId, async (code) => {
         const cwd = await window.electronAPI.ptyGetCwd(tileId).catch(() => null)
-        savedCwdRef.current = cwd ?? undefined
-        isExitedRef.current = true
+        entry.savedCwd = cwd ?? undefined
+        entry.isExited = true
+        entry.exitCode = code
         setExitInfo({ code })
         markTileExited(tileId)
       })
-      cleanupExitRef.current = cleanupExit
+      entry.cleanupExit = cleanupExit
     }
 
     // Try to reattach to an existing PTY (survives HMR), otherwise spawn new
@@ -174,7 +233,6 @@ export function TerminalTile({ tileId }: Props) {
           if (ok) {
             subscribePty()
           } else {
-            // Reattach failed, spawn fresh
             return window.electronAPI.ptySpawn(tileId, '', tileCols(tile?.w ?? 640), tileRows(tile?.h ?? 400), cwd).then(subscribePty)
           }
         })
@@ -187,7 +245,7 @@ export function TerminalTile({ tileId }: Props) {
 
     // Forward user input to PTY — silently ignored when process has exited
     term.onData((data) => {
-      if (isExitedRef.current) return
+      if (entry.isExited) return
       window.electronAPI.ptyWrite(tileId, data)
     })
 
@@ -203,22 +261,34 @@ export function TerminalTile({ tileId }: Props) {
     document.addEventListener('restart-terminal', handleRestartEvent)
 
     return () => {
-      cleanupPtyRef.current?.()
-      cleanupExitRef.current?.()
-      cleanupPtyRef.current = null
-      cleanupExitRef.current = null
       document.removeEventListener('restart-terminal', handleRestartEvent)
-      // Only kill PTY on explicit restart or tile removal, not on HMR remount
       const tileStillExists = useStore.getState().tiles.some((t) => t.id === tileId)
-      if (!tileStillExists || instanceKey > 0) {
+
+      if (!tileStillExists) {
+        // Tile was removed — fully dispose
+        entry.cleanupPty?.()
+        entry.cleanupExit?.()
         window.electronAPI.ptyKill(tileId)
+        term.dispose()
+        unregisterTerminal(tileId)
+      } else {
+        // View switch or HMR — detach DOM but keep xterm alive
+        if (xtermElement.parentNode === containerRef.current) {
+          containerRef.current!.removeChild(xtermElement)
+        }
       }
-      unregisterTerminal(tileId)
-      term.dispose()
+
       termRef.current = null
       fitAddonRef.current = null
     }
   }, [tileId, instanceKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Keep outputLink ref in sync on registry entry ──────────────────────────
+
+  useEffect(() => {
+    const entry = getTerminalEntry(tileId)
+    if (entry) entry.outputLink = tile?.outputLink ?? null
+  }, [tile?.outputLink, tileId])
 
   // ── Sync terminal theme when dark mode changes ────────────────────────────
 
@@ -254,9 +324,11 @@ export function TerminalTile({ tileId }: Props) {
         return
       }
 
-      // Use tile dimensions directly — immune to CSS transforms
-      const availW = tile.w - TERM_PAD_X
-      const availH = tile.h - TITLE_BAR_H - TERM_PAD_Y
+      // Use override dimensions if provided (focus mode), otherwise tile dimensions
+      const effW = overrideW ?? tile.w
+      const effH = overrideH ?? tile.h
+      const availW = effW - TERM_PAD_X
+      const availH = effH - TITLE_BAR_H - TERM_PAD_Y
       const cols = Math.max(2, Math.floor(availW / dims.width) - 1)
       const rows = Math.max(1, Math.floor(availH / dims.height))
 
@@ -271,7 +343,7 @@ export function TerminalTile({ tileId }: Props) {
     const t3 = setTimeout(doFit, 200)
 
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
-  }, [tile?.w, tile?.h, zoom, tileId, instanceKey])
+  }, [tile?.w, tile?.h, overrideW, overrideH, zoom, tileId, instanceKey])
 
   const handleRestart = () => {
     setExitInfo(null)

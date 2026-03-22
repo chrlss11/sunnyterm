@@ -4,7 +4,9 @@ import { SearchBar } from './search/SearchBar'
 import { WorkspacePicker } from './workspace/WorkspacePicker'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useStore, DEFAULT_WORKSPACE } from './store'
+import { FocusView } from './focus/FocusView'
 import { Terminal, Globe, Database, Undo2, Redo2, Map, Search, Sun, Moon, ZoomIn, ZoomOut, FolderOpen, ChevronRight, ChevronLeft } from 'lucide-react'
+import type { ViewMode } from './types'
 import { Toaster } from 'sonner'
 
 // ── Auto-save debounce (ms) ───────────────────────────────────────────────────
@@ -23,6 +25,7 @@ function AppInner() {
   const showConfirmClear = useStore((s) => s.showConfirmClear)
   const focusedId = useStore((s) => s.focusedId)
   const tiles = useStore((s) => s.tiles)
+  const viewMode = useStore((s) => s.viewMode)
   const { initFromPersisted, toggleShortcuts, toggleConfirmClear, clearCanvas } = useStore()
   const initializedRef = useRef(false)
 
@@ -86,10 +89,16 @@ function AppInner() {
       {/* Toolbar */}
       <Toolbar />
 
-      {/* Canvas */}
+      {/* Main view */}
       <div className="flex-1 min-h-0 relative">
-        <InfiniteCanvas />
-        <SearchBar />
+        {viewMode === 'canvas' ? (
+          <>
+            <InfiniteCanvas />
+            <SearchBar />
+          </>
+        ) : (
+          <FocusView />
+        )}
       </div>
 
       <Toaster
@@ -118,12 +127,13 @@ function AppInner() {
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
 function Toolbar() {
-  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, toggleDark, zoomIn, zoomOut } = useStore()
+  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, toggleDark, zoomIn, zoomOut, setViewMode } = useStore()
   const undoStack = useStore((s) => s.undoStack)
   const redoStack = useStore((s) => s.redoStack)
   const showMinimap = useStore((s) => s.showMinimap)
   const isDark = useStore((s) => s.isDark)
   const zoom = useStore((s) => s.zoom)
+  const viewMode = useStore((s) => s.viewMode)
   const [expanded, setExpanded] = React.useState(false)
 
   const ico = 14
@@ -214,6 +224,50 @@ function Toolbar() {
           </>
         )}
       </div>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* View mode toggle */}
+      <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+    </div>
+  )
+}
+
+// ── View mode toggle ─────────────────────────────────────────────────────────
+
+function ViewModeToggle({ viewMode, onChange }: { viewMode: ViewMode; onChange: (m: ViewMode) => void }) {
+  const isCanvas = viewMode === 'canvas'
+
+  return (
+    <div
+      className="relative flex items-center rounded-full bg-black/8 dark:bg-white/6 p-[3px]"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+    >
+      {/* Sliding pill */}
+      <div
+        className="absolute top-[3px] h-[calc(100%-6px)] w-[calc(50%-3px)] rounded-full bg-white/12 shadow-[0_1px_2px_rgba(0,0,0,0.15)] transition-transform duration-200 ease-out"
+        style={{ transform: isCanvas ? 'translateX(0)' : 'translateX(100%)' }}
+      />
+
+      <button
+        onClick={() => onChange('canvas')}
+        className={[
+          'relative z-10 px-3 py-1 rounded-full text-[11px] font-medium transition-colors duration-150',
+          isCanvas ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'
+        ].join(' ')}
+      >
+        Canvas
+      </button>
+      <button
+        onClick={() => onChange('focus')}
+        className={[
+          'relative z-10 px-3 py-1 rounded-full text-[11px] font-medium transition-colors duration-150',
+          !isCanvas ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'
+        ].join(' ')}
+      >
+        Focus
+      </button>
     </div>
   )
 }
