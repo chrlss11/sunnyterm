@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { TileContainer, TITLE_BAR_H } from '../tiles/TileContainer'
 import { SectionBox } from './SectionBox'
 import { Minimap } from '../minimap/Minimap'
+import { parseCurl } from '../lib/parseCurl'
 import type { DragState, Tile } from '../types'
 
 const RESIZE_HANDLE = 32
@@ -97,6 +98,34 @@ export function InfiniteCanvas() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
+  }, [])
+
+  // ── Paste curl detection ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      // Only intercept paste on the canvas, not in inputs/textareas
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+      const text = e.clipboardData?.getData('text/plain')
+      if (!text) return
+
+      const parsed = parseCurl(text)
+      if (!parsed) return
+
+      e.preventDefault()
+
+      const { spawnTile } = useStore.getState()
+      const tile = spawnTile('http')
+
+      // Store curl data for the HTTP tile to consume on mount
+      useStore.setState((s) => ({
+        pendingCurlData: { ...s.pendingCurlData, [tile.id]: parsed }
+      }))
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
   }, [])
 
   // ── Pointer events ────────────────────────────────────────────────────────

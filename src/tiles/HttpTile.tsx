@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
+import { useStore } from '../store'
 import type { HttpResponse, HttpRequestEntry } from '../types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -108,10 +109,26 @@ export function HttpTile({ tileId }: { tileId: string }) {
   const urlInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<boolean>(false)
 
-  // ── focus url on mount ──────────────────────────────────────────────────────
+  const { consumeCurlData } = useStore()
+
+  // ── Load pending curl data + focus url on mount ───────────────────────────
   useEffect(() => {
+    const curlData = consumeCurlData(tileId)
+    if (curlData) {
+      setMethod((curlData.method as Method) || 'GET')
+      setUrl(curlData.url)
+      setBody(curlData.body)
+      if (curlData.headers.length > 0) {
+        setHeaders(curlData.headers.map((h, i) => ({
+          id: `h${Date.now()}-${i}`,
+          key: h.key,
+          value: h.value,
+          enabled: true
+        })))
+      }
+    }
     urlInputRef.current?.focus()
-  }, [tileId])
+  }, [tileId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── header helpers ──────────────────────────────────────────────────────────
   const addHeader = useCallback(() => {

@@ -74,6 +74,8 @@ export interface CanvasStore {
   activeWorkspace: string | null
   /** CWDs to restore when terminal tiles mount (populated on workspace load) */
   tileCwds: Record<string, string>
+  /** Pending curl data to populate a newly spawned HTTP tile */
+  pendingCurlData: Record<string, { method: string; url: string; headers: { key: string; value: string }[]; body: string }>
 
   // ── Actions ────────────────────────────────────────────────────────────────
   setZoom: (zoom: number) => void
@@ -137,6 +139,8 @@ export interface CanvasStore {
   refreshWorkspaces: () => Promise<void>
   /** Consume and clear the saved CWD for a tile (called by TerminalTile on mount). */
   consumeTileCwd: (tileId: string) => string | null
+  /** Consume and clear pending curl data for an HTTP tile. */
+  consumeCurlData: (tileId: string) => { method: string; url: string; headers: { key: string; value: string }[]; body: string } | null
   /** Init store from persisted state (called once on app start). */
   initFromPersisted: () => Promise<void>
 }
@@ -167,6 +171,7 @@ export const useStore = create<CanvasStore>()(
     workspaces: [],
     activeWorkspace: null,
     tileCwds: {},
+    pendingCurlData: {},
 
     // ── Viewport ─────────────────────────────────────────────────────────────
 
@@ -674,6 +679,19 @@ export const useStore = create<CanvasStore>()(
         })
       }
       return cwd
+    },
+
+    consumeCurlData: (tileId) => {
+      const { pendingCurlData } = get()
+      const data = pendingCurlData[tileId] ?? null
+      if (data) {
+        set((s) => {
+          const next = { ...s.pendingCurlData }
+          delete next[tileId]
+          return { pendingCurlData: next }
+        })
+      }
+      return data
     },
 
     initFromPersisted: async () => {
