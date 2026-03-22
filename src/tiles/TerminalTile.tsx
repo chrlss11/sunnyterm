@@ -1,0 +1,313 @@
+import React, { useEffect, useRef, useState } from 'react'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import { SearchAddon } from '@xterm/addon-search'
+
+import '@xterm/xterm/css/xterm.css'
+import { useStore } from '../store'
+import { TITLE_BAR_H } from './TileContainer'
+import { registerTerminal, unregisterTerminal } from '../lib/terminalRegistry'
+import { stripAnsi } from '../lib/stripAnsi'
+
+// ── Terminal themes ────────────────────────────────────────────────────────────
+
+const darkTheme = {
+  background: '#1B1D1F',
+  foreground: '#e0e0e0',
+  cursor: '#a0a0ff',
+  cursorAccent: '#1B1D1F',
+  selectionBackground: '#4040a0',
+  black: '#222426',
+  red: '#ff5555',
+  green: '#50fa7b',
+  yellow: '#f1fa8c',
+  blue: '#bd93f9',
+  magenta: '#ff79c6',
+  cyan: '#8be9fd',
+  white: '#f8f8f2',
+  brightBlack: '#6272a4',
+  brightRed: '#ff6e6e',
+  brightGreen: '#69ff94',
+  brightYellow: '#ffffa5',
+  brightBlue: '#d6acff',
+  brightMagenta: '#ff92df',
+  brightCyan: '#a4ffff',
+  brightWhite: '#ffffff'
+}
+
+const lightTheme = {
+  background: '#ffffff',
+  foreground: '#24292e',
+  cursor: '#586069',
+  cursorAccent: '#ffffff',
+  selectionBackground: '#c8d3e8',
+  black: '#24292e',
+  red: '#d73a49',
+  green: '#22863a',
+  yellow: '#b08800',
+  blue: '#0366d6',
+  magenta: '#6f42c1',
+  cyan: '#1b7c83',
+  white: '#6a737d',
+  brightBlack: '#959da5',
+  brightRed: '#cb2431',
+  brightGreen: '#28a745',
+  brightYellow: '#dbab09',
+  brightBlue: '#2188ff',
+  brightMagenta: '#8a63d2',
+  brightCyan: '#3192aa',
+  brightWhite: '#d1d5da'
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+interface Props {
+  tileId: string
+}
+
+export function TerminalTile({ tileId }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const fitAddonRef = useRef<FitAddon | null>(null)
+  const cleanupPtyRef = useRef<(() => void) | null>(null)
+  const cleanupExitRef = useRef<(() => void) | null>(null)
+  // Ref so onData callback always sees current exit state without closure capture
+  const isExitedRef = useRef(false)
+  // CWD to restore on restart
+  const savedCwdRef = useRef<string | undefined>(undefined)
+  // Track current isDark for terminal init effect (avoids re-running on theme change)
+  const isDarkRef = useRef(true)
+
+  const [exitInfo, setExitInfo] = useState<{ code: number } | null>(null)
+  // incrementing this forces terminal + PTY to fully reinitialise
+  const [instanceKey, setInstanceKey] = useState(0)
+
+  const tiles = useStore((s) => s.tiles)
+  const isDark = useStore((s) => s.isDark)
+  const zoom = useStore((s) => s.zoom)
+  isDarkRef.current = isDark
+
+  const tile = tiles.find((t) => t.id === tileId)
+
+  const outputLinkRef = useRef<string | null>(tile?.outputLink ?? null)
+  outputLinkRef.current = tile?.outputLink ?? null
+
+  const { autoRenameTile, consumeTileCwd, markTileExited, markTileAlive } = useStore()
+
+  // ── Terminal + PTY init (re-runs on instanceKey change for restart) ────────
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    isExitedRef.current = false
+    setExitInfo(null)
+
+    const term = new Terminal({
+      theme: isDarkRef.current ? darkTheme : lightTheme,
+      fontFamily: '"Google Sans Mono", Menlo, Monaco, monospace',
+      fontSize: 13,
+      lineHeight: 1.0,
+      cursorBlink: true,
+      cursorStyle: 'block',
+      scrollback: 10000,
+      allowProposedApi: true,
+      macOptionIsMeta: true
+    })
+
+    const fitAddon = new FitAddon()
+    const webLinksAddon = new WebLinksAddon()
+    const searchAddon = new SearchAddon()
+
+    term.loadAddon(fitAddon)
+    term.loadAddon(webLinksAddon)
+    term.loadAddon(searchAddon)
+
+    term.open(containerRef.current)
+
+    // Resize terminal to match tile dimensions immediately, before PTY spawn
+    const initCols = tileCols(tile?.w ?? 640)
+    const initRows = tileRows(tile?.h ?? 400)
+    term.resize(initCols, initRows)
+
+    termRef.current = term
+    fitAddonRef.current = fitAddon
+
+    registerTerminal(tileId, searchAddon)
+
+    // Title changes from the shell are ignored — tiles keep their numbered names
+    // Users can rename via double-click or context menu
+
+    // Determine CWD: use workspace-restored CWD on first mount, saved CWD on restart
+    const cwd = instanceKey === 0
+      ? (consumeTileCwd(tileId) ?? undefined)
+      : savedCwdRef.current
+
+    markTileAlive(tileId)
+
+    // Helper to subscribe to PTY data/exit events
+    const subscribePty = () => {
+      const cleanup = window.electronAPI.onPtyData(tileId, (data) => {
+        term.write(data)
+        const link = outputLinkRef.current
+        if (link) {
+          const clean = stripAnsi(data)
+          if (clean) window.electronAPI.ptyWrite(link, clean)
+        }
+      })
+      cleanupPtyRef.current = cleanup
+
+      const cleanupExit = window.electronAPI.onPtyExit(tileId, async (code) => {
+        const cwd = await window.electronAPI.ptyGetCwd(tileId).catch(() => null)
+        savedCwdRef.current = cwd ?? undefined
+        isExitedRef.current = true
+        setExitInfo({ code })
+        markTileExited(tileId)
+      })
+      cleanupExitRef.current = cleanupExit
+    }
+
+    // Try to reattach to an existing PTY (survives HMR), otherwise spawn new
+    window.electronAPI.ptyHas(tileId).then((exists) => {
+      if (exists) {
+        window.electronAPI.ptyReattach(tileId).then((ok) => {
+          if (ok) {
+            subscribePty()
+          } else {
+            // Reattach failed, spawn fresh
+            return window.electronAPI.ptySpawn(tileId, '', tileCols(tile?.w ?? 640), tileRows(tile?.h ?? 400), cwd).then(subscribePty)
+          }
+        })
+      } else {
+        window.electronAPI.ptySpawn(tileId, '', tileCols(tile?.w ?? 640), tileRows(tile?.h ?? 400), cwd).then(subscribePty)
+      }
+    }).catch((err) => {
+      term.write(`\r\n\x1b[31mFailed to spawn PTY: ${err}\x1b[0m\r\n`)
+    })
+
+    // Forward user input to PTY — silently ignored when process has exited
+    term.onData((data) => {
+      if (isExitedRef.current) return
+      window.electronAPI.ptyWrite(tileId, data)
+    })
+
+    term.onResize(({ cols, rows }) => {
+      window.electronAPI.ptyResize(tileId, cols, rows)
+    })
+
+    // Listen for restart requests dispatched from context menu
+    const handleRestartEvent = (e: Event) => {
+      const { tileId: id } = (e as CustomEvent).detail
+      if (id === tileId) setInstanceKey((k) => k + 1)
+    }
+    document.addEventListener('restart-terminal', handleRestartEvent)
+
+    return () => {
+      cleanupPtyRef.current?.()
+      cleanupExitRef.current?.()
+      cleanupPtyRef.current = null
+      cleanupExitRef.current = null
+      document.removeEventListener('restart-terminal', handleRestartEvent)
+      // Only kill PTY on explicit restart or tile removal, not on HMR remount
+      const tileStillExists = useStore.getState().tiles.some((t) => t.id === tileId)
+      if (!tileStillExists || instanceKey > 0) {
+        window.electronAPI.ptyKill(tileId)
+      }
+      unregisterTerminal(tileId)
+      term.dispose()
+      termRef.current = null
+      fitAddonRef.current = null
+    }
+  }, [tileId, instanceKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Sync terminal theme when dark mode changes ────────────────────────────
+
+  useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    const theme = isDark ? darkTheme : lightTheme
+    term.options.theme = theme
+    // Force xterm to repaint with new theme colors
+    term.refresh(0, term.rows - 1)
+    // Update the container background to match
+    if (containerRef.current) {
+      const viewport = containerRef.current.querySelector('.xterm-viewport') as HTMLElement
+      if (viewport) viewport.style.backgroundColor = theme.background
+    }
+  }, [isDark])
+
+  // ── Fit terminal to tile dimensions ──────────────────────────────────────
+  // Uses tile.w/tile.h directly instead of DOM measurements to avoid
+  // issues with CSS transforms (zoom) and mount animations (scale 0.97→1)
+
+  useEffect(() => {
+    const term = termRef.current
+    if (!term || !tile) return
+
+    const doFit = () => {
+      if (!termRef.current) return
+      const core = (termRef.current as any)._core
+      const dims = core?._renderService?.dimensions?.css?.cell
+      if (!dims?.width || !dims?.height) {
+        // Renderer not ready yet, use fitAddon as fallback
+        try { fitAddonRef.current?.fit() } catch {}
+        return
+      }
+
+      // Use tile dimensions directly — immune to CSS transforms
+      const availW = tile.w - TERM_PAD_X
+      const availH = tile.h - TITLE_BAR_H - TERM_PAD_Y
+      const cols = Math.max(2, Math.floor(availW / dims.width) - 1)
+      const rows = Math.max(1, Math.floor(availH / dims.height))
+
+      if (cols !== termRef.current.cols || rows !== termRef.current.rows) {
+        termRef.current.resize(cols, rows)
+      }
+    }
+
+    // Staggered fits: 0ms (immediate), 100ms (after render), 200ms (after animation)
+    const t1 = setTimeout(doFit, 0)
+    const t2 = setTimeout(doFit, 100)
+    const t3 = setTimeout(doFit, 200)
+
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+  }, [tile?.w, tile?.h, zoom, tileId, instanceKey])
+
+  const handleRestart = () => {
+    setExitInfo(null)
+    markTileAlive(tileId)
+    setInstanceKey((k) => k + 1)
+  }
+
+  return (
+    <div className="w-full h-full relative">
+      <div ref={containerRef} className="w-full h-full" style={{ padding: '6px 8px' }} />
+
+      {exitInfo !== null && (
+        <div
+          className="absolute inset-0 bg-black/65 flex flex-col items-center justify-center gap-3"
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <div className="text-white/70 text-sm font-medium">
+            Process exited (code {exitInfo.code})
+          </div>
+          <button
+            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors cursor-pointer"
+            onClick={handleRestart}
+          >
+            ↺ Restart
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Terminal padding (must match the style on containerRef)
+const TERM_PAD_X = 8 * 2 // 8px left + 8px right
+const TERM_PAD_Y = 6 * 2 // 6px top + 6px bottom
+
+// Calculate cols/rows from tile pixel dimensions and font metrics
+function tileCols(tileW: number) { return Math.max(10, Math.floor((tileW - TERM_PAD_X) / 7.8) - 1) }
+function tileRows(tileH: number) { return Math.max(5, Math.floor((tileH - TITLE_BAR_H - TERM_PAD_Y) / 13)) }

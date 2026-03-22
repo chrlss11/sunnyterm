@@ -1,0 +1,489 @@
+import React, { useRef, useCallback, useEffect, useState } from 'react'
+import { useStore } from '../store'
+import { TileContainer, TITLE_BAR_H } from '../tiles/TileContainer'
+import { Minimap } from '../minimap/Minimap'
+import type { DragState, Tile } from '../types'
+
+const RESIZE_HANDLE = 32
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 2
+
+/** Hit-tests a screen-space point against a tile (canvas coords already mapped) */
+function hitTest(
+  canvasX: number,
+  canvasY: number,
+  tile: { x: number; y: number; w: number; h: number }
+): { inTitle: boolean; inResize: boolean; inClose: boolean; inTile: boolean } {
+  const inTile =
+    canvasX >= tile.x &&
+    canvasX <= tile.x + tile.w &&
+    canvasY >= tile.y &&
+    canvasY <= tile.y + tile.h
+
+  if (!inTile) return { inTitle: false, inResize: false, inClose: false, inTile: false }
+
+  const inTitle = canvasY <= tile.y + TITLE_BAR_H
+  const inResize =
+    canvasX >= tile.x + tile.w - RESIZE_HANDLE &&
+    canvasY >= tile.y + tile.h - RESIZE_HANDLE
+  const inClose =
+    canvasX >= tile.x + tile.w - TITLE_BAR_H &&
+    canvasY <= tile.y + TITLE_BAR_H
+
+  return { inTitle, inResize, inClose, inTile }
+}
+
+export function InfiniteCanvas() {
+  const zoom = useStore((s) => s.zoom)
+  const panX = useStore((s) => s.panX)
+  const panY = useStore((s) => s.panY)
+  const tiles = useStore((s) => s.tiles)
+  const showMinimap = useStore((s) => s.showMinimap)
+  const drag = useStore((s) => s.drag)
+  const linkingFromId = useStore((s) => s.linkingFromId)
+  const selectedIds = useStore((s) => s.selectedIds)
+
+  const {
+    zoomAt, panBy, spawnTile, removeTile, focusTile,
+    startDrag, updateDrag, endDrag,
+    completeLinking, cancelLinking,
+    setSelectedIds, clearSelection
+  } = useStore()
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isPanning = useRef(false)
+  const spaceHeld = useRef(false)
+  const lastMouse = useRef({ x: 0, y: 0 })
+  const lastClickTime = useRef(0)
+  const [mouseScreen, setMouseScreen] = useState<{ x: number; y: number } | null>(null)
+  const [lasso, setLasso] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
+  const isLassoing = useRef(false)
+  const lassoStart = useRef({ x: 0, y: 0 })
+
+  // Convert screen coords to canvas coords (accounting for container offset)
+  const toCanvas = useCallback(
+    (screenX: number, screenY: number) => {
+      const rect = containerRef.current?.getBoundingClientRect()
+      const ox = rect?.left ?? 0
+      const oy = rect?.top ?? 0
+      return {
+        x: (screenX - ox - panX) / zoom,
+        y: (screenY - oy - panY) / zoom
+      }
+    },
+    [panX, panY, zoom]
+  )
+
+  // ── Keyboard (Space for pan) ──────────────────────────────────────────────
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && e.target === document.body) {
+        spaceHeld.current = true
+        if (containerRef.current) containerRef.current.style.cursor = 'grab'
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        spaceHeld.current = false
+        if (containerRef.current) containerRef.current.style.cursor = 'default'
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [])
+
+  // ── Pointer events ────────────────────────────────────────────────────────
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Middle mouse, right-click, or space+left = pan
+      if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceHeld.current)) {
+        isPanning.current = true
+        lastMouse.current = { x: e.clientX, y: e.clientY }
+        e.currentTarget.setPointerCapture(e.pointerId)
+        if (containerRef.current) containerRef.current.style.cursor = 'grabbing'
+        return
+      }
+
+      if (e.button !== 0) return
+
+      const canvas = toCanvas(e.clientX, e.clientY)
+
+      // Sort tiles by zIndex descending (top-most first)
+      const sorted = [...tiles].sort((a, b) => b.zIndex - a.zIndex)
+      const hit = sorted.find((t) => {
+        const r = hitTest(canvas.x, canvas.y, t)
+        return r.inTile
+      })
+
+      if (!hit) {
+        // Double-click on canvas background = spawn terminal
+        const now = Date.now()
+        if (now - lastClickTime.current < 300) {
+          spawnTile('terminal', canvas.x - 320, canvas.y - 200)
+          lastClickTime.current = 0
+          return
+        }
+        lastClickTime.current = now
+
+        // Start lasso selection
+        clearSelection()
+        focusTile(null)
+        isLassoing.current = true
+        lassoStart.current = { x: canvas.x, y: canvas.y }
+        setLasso({ x1: canvas.x, y1: canvas.y, x2: canvas.x, y2: canvas.y })
+        e.currentTarget.setPointerCapture(e.pointerId)
+        return
+      }
+
+      focusTile(hit.id)
+      const r = hitTest(canvas.x, canvas.y, hit)
+
+      if (r.inClose) {
+        removeTile(hit.id)
+        return
+      }
+
+      // Linking mode: clicking a tile completes the link
+      if (linkingFromId) {
+        if (hit.id !== linkingFromId) {
+          completeLinking(hit.id)
+        } else {
+          cancelLinking()
+        }
+        return
+      }
+
+      if (r.inTitle || r.inResize) {
+        // Build group starts if dragging a selected tile
+        const isSelected = selectedIds.includes(hit.id)
+        let groupStarts: Record<string, { x: number; y: number }> | undefined
+        if (isSelected && r.inTitle) {
+          groupStarts = {}
+          for (const id of selectedIds) {
+            const t = tiles.find((tt) => tt.id === id)
+            if (t) groupStarts[id] = { x: t.x, y: t.y }
+          }
+        }
+
+        const dragState: DragState = {
+          tileId: hit.id,
+          kind: r.inResize ? 'resize' : 'move',
+          startMouseX: e.clientX,
+          startMouseY: e.clientY,
+          startTileX: hit.x,
+          startTileY: hit.y,
+          startTileW: hit.w,
+          startTileH: hit.h,
+          groupStarts
+        }
+        startDrag(dragState)
+        e.currentTarget.setPointerCapture(e.pointerId)
+      }
+    },
+    [tiles, zoom, panX, panY, toCanvas, linkingFromId, selectedIds, focusTile, spawnTile, removeTile, startDrag, completeLinking, cancelLinking, clearSelection]
+  )
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (isPanning.current) {
+        panBy(e.clientX - lastMouse.current.x, e.clientY - lastMouse.current.y)
+        lastMouse.current = { x: e.clientX, y: e.clientY }
+        return
+      }
+      if (isLassoing.current) {
+        const canvas = toCanvas(e.clientX, e.clientY)
+        setLasso({ x1: lassoStart.current.x, y1: lassoStart.current.y, x2: canvas.x, y2: canvas.y })
+        // Select tiles intersecting the lasso
+        const lx1 = Math.min(lassoStart.current.x, canvas.x)
+        const ly1 = Math.min(lassoStart.current.y, canvas.y)
+        const lx2 = Math.max(lassoStart.current.x, canvas.x)
+        const ly2 = Math.max(lassoStart.current.y, canvas.y)
+        const ids = tiles
+          .filter((t) => t.x + t.w > lx1 && t.x < lx2 && t.y + t.h > ly1 && t.y < ly2)
+          .map((t) => t.id)
+        setSelectedIds(ids)
+        return
+      }
+      if (drag) {
+        updateDrag(e.clientX, e.clientY)
+      }
+    },
+    [drag, panBy, updateDrag, toCanvas, tiles, setSelectedIds]
+  )
+
+  const onPointerUp = useCallback(
+    () => {
+      if (isPanning.current) {
+        isPanning.current = false
+        if (containerRef.current) containerRef.current.style.cursor = 'default'
+      }
+      if (isLassoing.current) {
+        isLassoing.current = false
+        setLasso(null)
+      }
+      endDrag()
+    },
+    [endDrag]
+  )
+
+  // ── Wheel (zoom + pan) ────────────────────────────────────────────────────
+
+  const onWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      if (e.metaKey || e.ctrlKey) {
+        // Pinch-to-zoom (ctrlKey) or Cmd+scroll (metaKey):
+        // Use exponential zoom so that fast pinches zoom faster than slow ones.
+        // deltaY sign: positive = zoom out, negative = zoom in (standard browser behaviour)
+        const { zoom: currentZoom, panX: currentPanX, panY: currentPanY } = useStore.getState()
+        const factor = Math.exp(-e.deltaY * 0.008)
+        const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, currentZoom * factor))
+        const newPanX = e.clientX - (e.clientX - currentPanX) * (newZoom / currentZoom)
+        const newPanY = e.clientY - (e.clientY - currentPanY) * (newZoom / currentZoom)
+        useStore.setState({ zoom: newZoom, panX: newPanX, panY: newPanY })
+      } else {
+        // Plain scroll = pan
+        panBy(-e.deltaX, -e.deltaY)
+      }
+    },
+    [panBy]
+  )
+
+  // ── Context menu (cancel linking) ─────────────────────────────────────────
+
+  const onContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      if (linkingFromId) {
+        cancelLinking()
+      }
+    },
+    [linkingFromId, cancelLinking]
+  )
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  // Sort tiles for rendering (lowest zIndex first = rendered below)
+  const sortedTiles = [...tiles].sort((a, b) => a.zIndex - b.zIndex)
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative overflow-hidden w-full h-full bg-canvas select-none"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onWheel={onWheel}
+      onContextMenu={onContextMenu}
+      onMouseMove={(e) => setMouseScreen({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setMouseScreen(null)}
+      style={{ touchAction: 'none' }}
+    >
+      {/* Canvas transform layer */}
+      <div
+        style={{
+          position: 'absolute',
+          transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+          transformOrigin: '0 0',
+          willChange: 'transform'
+        }}
+      >
+        {/* Dot grid */}
+        <DotGrid zoom={zoom} panX={panX} panY={panY} mouseScreen={mouseScreen} containerRef={containerRef} />
+
+        {/* Tiles */}
+        {sortedTiles.map((tile) => (
+          <TileContainer key={tile.id} tile={tile} isSelected={selectedIds.includes(tile.id)} />
+        ))}
+
+        {/* Lasso selection rectangle */}
+        {lasso && (
+          <div
+            style={{
+              position: 'absolute',
+              left: Math.min(lasso.x1, lasso.x2),
+              top: Math.min(lasso.y1, lasso.y2),
+              width: Math.abs(lasso.x2 - lasso.x1),
+              height: Math.abs(lasso.y2 - lasso.y1),
+              border: '1.5px dashed rgba(100,150,255,0.5)',
+              backgroundColor: 'rgba(100,150,255,0.08)',
+              borderRadius: 4,
+              pointerEvents: 'none'
+            }}
+          />
+        )}
+      </div>
+
+      {/* Link lines overlay (screen-space SVG, not scaled by canvas transform) */}
+      <LinkLines tiles={tiles} panX={panX} panY={panY} zoom={zoom} />
+
+      {/* Minimap (fixed overlay, not affected by canvas transform) */}
+      {showMinimap && <Minimap />}
+
+      {/* Linking mode indicator */}
+      {linkingFromId && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500/90 text-black text-sm font-medium px-3 py-1 rounded-full pointer-events-none">
+          Click a tile to link output → right-click or Escape to cancel
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Link lines overlay ────────────────────────────────────────────────────────
+
+interface LinkLinesProps {
+  tiles: Tile[]
+  panX: number
+  panY: number
+  zoom: number
+}
+
+function LinkLines({ tiles, panX, panY, zoom }: LinkLinesProps) {
+  // Compute screen-space center of a tile's right edge
+  const tileCenterRight = (t: Tile) => ({
+    x: (t.x + t.w) * zoom + panX,
+    y: (t.y + t.h / 2) * zoom + panY
+  })
+  const tileCenterLeft = (t: Tile) => ({
+    x: t.x * zoom + panX,
+    y: (t.y + t.h / 2) * zoom + panY
+  })
+
+  const links = tiles.flatMap((t) => {
+    if (!t.outputLink) return []
+    const target = tiles.find((o) => o.id === t.outputLink)
+    if (!target) return []
+    const from = tileCenterRight(t)
+    const to = tileCenterLeft(target)
+    return [{ id: `${t.id}->${t.outputLink}`, from, to }]
+  })
+
+  if (links.length === 0) return null
+
+  return (
+    <svg
+      className="absolute inset-0 pointer-events-none"
+      style={{ width: '100%', height: '100%', overflow: 'visible' }}
+    >
+      <defs>
+        <marker id="link-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#facc15" opacity="0.8" />
+        </marker>
+      </defs>
+      {links.map(({ id, from, to }) => {
+        const cx1 = from.x + Math.abs(to.x - from.x) * 0.4
+        const cx2 = to.x - Math.abs(to.x - from.x) * 0.4
+        return (
+          <path
+            key={id}
+            d={`M ${from.x} ${from.y} C ${cx1} ${from.y}, ${cx2} ${to.y}, ${to.x} ${to.y}`}
+            stroke="#facc15"
+            strokeWidth="1.5"
+            strokeOpacity="0.7"
+            fill="none"
+            strokeDasharray="4 3"
+            markerEnd="url(#link-arrow)"
+          />
+        )
+      })}
+    </svg>
+  )
+}
+
+// ── Dot grid background with radial hover glow ──────────────────────────────
+
+const GRID_SPACING = 24
+const GLOW_RADIUS = 180
+
+interface DotGridProps {
+  zoom: number
+  panX: number
+  panY: number
+  mouseScreen: { x: number; y: number } | null
+  containerRef: React.RefObject<HTMLDivElement | null>
+}
+
+function DotGrid({ zoom, panX, panY, mouseScreen, containerRef }: DotGridProps) {
+  const isDark = useStore((s) => s.isDark)
+  const size = 8000
+  const dotR = Math.max(0.5, 1 / zoom)
+  const fill = isDark ? '#fff' : '#8a8a96'
+  const baseOpacity = isDark ? 0.15 : 0.3
+
+  // Convert mouse screen position to canvas-space for SVG glow
+  let mouseCanvasX: number | null = null
+  let mouseCanvasY: number | null = null
+  if (mouseScreen && containerRef.current) {
+    const rect = containerRef.current.getBoundingClientRect()
+    mouseCanvasX = (mouseScreen.x - rect.left - panX) / zoom
+    mouseCanvasY = (mouseScreen.y - rect.top - panY) / zoom
+  }
+
+  const glowR = GLOW_RADIUS / zoom
+  const hasGlow = mouseCanvasX !== null && mouseCanvasY !== null
+
+  return (
+    <>
+      {/* Base dot grid */}
+      <svg
+        style={{
+          position: 'absolute',
+          left: -size / 2,
+          top: -size / 2,
+          width: size,
+          height: size,
+          pointerEvents: 'none',
+          opacity: baseOpacity
+        }}
+      >
+        <defs>
+          <pattern id="dot-grid" x="0" y="0" width={GRID_SPACING} height={GRID_SPACING} patternUnits="userSpaceOnUse">
+            <circle cx={GRID_SPACING / 2} cy={GRID_SPACING / 2} r={dotR} fill={fill} />
+          </pattern>
+        </defs>
+        <rect width={size} height={size} fill="url(#dot-grid)" />
+      </svg>
+
+      {/* Glow layer: brighter dots near cursor */}
+      {hasGlow && (
+        <svg
+          style={{
+            position: 'absolute',
+            left: -size / 2,
+            top: -size / 2,
+            width: size,
+            height: size,
+            pointerEvents: 'none'
+          }}
+        >
+          <defs>
+            <pattern id="dot-grid-glow" x="0" y="0" width={GRID_SPACING} height={GRID_SPACING} patternUnits="userSpaceOnUse">
+              <circle cx={GRID_SPACING / 2} cy={GRID_SPACING / 2} r={dotR * 2.5} fill={fill} />
+            </pattern>
+            <radialGradient id="glow-mask-grad" cx={((mouseCanvasX ?? 0) + size / 2) / size} cy={((mouseCanvasY ?? 0) + size / 2) / size} r={glowR / size}>
+              <stop offset="0%" stopColor="white" stopOpacity="1" />
+              <stop offset="100%" stopColor="white" stopOpacity="0" />
+            </radialGradient>
+            <mask id="glow-mask">
+              <rect width={size} height={size} fill="url(#glow-mask-grad)" />
+            </mask>
+          </defs>
+          <rect
+            width={size}
+            height={size}
+            fill="url(#dot-grid-glow)"
+            mask="url(#glow-mask)"
+            opacity={isDark ? 0.5 : 0.5}
+          />
+        </svg>
+      )}
+    </>
+  )
+}

@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Google Sans Mono';
+  font-style: normal;
+  font-weight: 400;
+  src: url('../resources/fonts/GoogleSansMono-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Google Sans Mono';
+  font-style: normal;
+  font-weight: 500;
+  src: url('../resources/fonts/GoogleSansMono-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Google Sans Mono';
+  font-style: normal;
+  font-weight: 700;
+  src: url('../resources/fonts/GoogleSansMono-Bold.ttf') format('truetype');
+}
+
+@theme {
+  --color-canvas: var(--canvas);
+  --color-tile: var(--tile);
+  --color-titlebar: var(--titlebar);
+  --color-toolbar: var(--toolbar);
+  --color-surface: var(--surface);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --animate-fade-in: fade-in 200ms ease forwards;
+}
+
+/* Light mode (default) */
+:root {
+  --canvas: #ebedf0;
+  --tile: #ffffff;
+  --titlebar: #f4f5f7;
+  --toolbar: #f4f5f7;
+  --surface: #f8f9fb;
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+  --border: rgba(0, 0, 0, 0.15);
+}
+
+/* Dark mode */
+.dark {
+  --canvas: #111213;
+  --tile: #1B1D1F;
+  --titlebar: #222426;
+  --toolbar: #141516;
+  --surface: #1B1D1F;
+  --text-primary: #e0e0e8;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --border: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--canvas);
+  color: var(--text-primary);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.5); }
+
+/* xterm.js overrides */
+.xterm { height: 100%; }
+.xterm-viewport { overflow-y: auto !important; }
+.xterm .xterm-screen { height: 100% !important; }
