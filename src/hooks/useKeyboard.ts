@@ -44,6 +44,14 @@ export function useKeyboard() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const meta = e.metaKey
 
+      // Ctrl+Tab — toggle canvas/focus view
+      if (e.key === 'Tab' && e.ctrlKey && !e.altKey && !meta) {
+        e.preventDefault()
+        const { viewMode, setViewMode } = useStore.getState()
+        setViewMode(viewMode === 'canvas' ? 'focus' : 'canvas')
+        return
+      }
+
       if (e.key === 'Escape') {
         if (linkingFromId) cancelLinking()
         return
