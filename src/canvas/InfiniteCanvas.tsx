@@ -4,7 +4,7 @@ import { TileContainer, TITLE_BAR_H } from '../tiles/TileContainer'
 import { SectionBox } from './SectionBox'
 import { Minimap } from '../minimap/Minimap'
 import { parseCurl } from '../lib/parseCurl'
-import { AlignStartVertical, AlignEndVertical, AlignStartHorizontal, AlignEndHorizontal, AlignCenterVertical, AlignCenterHorizontal, Rows3, Columns3 } from 'lucide-react'
+import { AlignStartVertical, AlignEndVertical, AlignStartHorizontal, AlignEndHorizontal, AlignCenterVertical, AlignCenterHorizontal, Rows3, Columns3, Terminal, Globe, Database, Compass } from 'lucide-react'
 import type { DragState, Tile } from '../types'
 
 const RESIZE_HANDLE = 32
@@ -64,6 +64,7 @@ export function InfiniteCanvas() {
   const isLassoing = useRef(false)
   const lassoStart = useRef({ x: 0, y: 0 })
   const [alignMenu, setAlignMenu] = useState<{ x: number; y: number } | null>(null)
+  const [createMenu, setCreateMenu] = useState<{ x: number; y: number; canvasX: number; canvasY: number } | null>(null)
 
   // Convert screen coords to canvas coords (accounting for container offset)
   const toCanvas = useCallback(
@@ -135,6 +136,7 @@ export function InfiniteCanvas() {
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       setAlignMenu(null)
+      setCreateMenu(null)
 
       // Middle mouse, right-click, or space+left = pan
       if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceHeld.current)) {
@@ -300,9 +302,17 @@ export function InfiniteCanvas() {
       }
       if (selectedIds.length >= 2) {
         setAlignMenu({ x: e.clientX, y: e.clientY })
+      } else {
+        const canvas = toCanvas(e.clientX, e.clientY)
+        // Only show create menu if right-click is on empty canvas (not on a tile)
+        const sorted = [...tiles].sort((a, b) => b.zIndex - a.zIndex)
+        const hit = sorted.find((t) => hitTest(canvas.x, canvas.y, t).inTile)
+        if (!hit) {
+          setCreateMenu({ x: e.clientX, y: e.clientY, canvasX: canvas.x, canvasY: canvas.y })
+        }
       }
     },
-    [linkingFromId, cancelLinking, selectedIds]
+    [linkingFromId, cancelLinking, selectedIds, tiles, toCanvas]
   )
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -413,6 +423,18 @@ export function InfiniteCanvas() {
           onClose={() => setAlignMenu(null)}
         />
       )}
+
+      {/* Create tile context menu */}
+      {createMenu && (
+        <CreateMenu
+          x={createMenu.x}
+          y={createMenu.y}
+          canvasX={createMenu.canvasX}
+          canvasY={createMenu.canvasY}
+          containerRef={containerRef}
+          onClose={() => setCreateMenu(null)}
+        />
+      )}
     </div>
   )
 }
@@ -475,6 +497,53 @@ function LinkLines({ tiles, panX, panY, zoom }: LinkLinesProps) {
         )
       })}
     </svg>
+  )
+}
+
+// ── Create tile context menu ────────────────────────────────────────────────
+
+function CreateMenu({ x, y, canvasX, canvasY, containerRef, onClose }: {
+  x: number; y: number; canvasX: number; canvasY: number
+  containerRef: React.RefObject<HTMLDivElement | null>
+  onClose: () => void
+}) {
+  const { spawnTile } = useStore()
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  const rect = containerRef.current?.getBoundingClientRect()
+  const menuX = x - (rect?.left ?? 0)
+  const menuY = y - (rect?.top ?? 0)
+
+  const item = 'flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors'
+  const ico = 13
+
+  const spawn = (kind: 'terminal' | 'http' | 'postgres' | 'browser') => {
+    spawnTile(kind, canvasX - 320, canvasY - 200)
+    onClose()
+  }
+
+  return (
+    <div
+      ref={ref}
+      style={{ position: 'absolute', left: menuX, top: menuY, zIndex: 99999 }}
+      className="w-40 rounded-lg border border-border bg-tile shadow-xl py-1"
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div className="px-3 py-1 text-[10px] text-text-muted font-medium uppercase tracking-wider">New Tile</div>
+      <div className={item} onClick={() => spawn('terminal')}><Terminal size={ico} /> Terminal</div>
+      <div className={item} onClick={() => spawn('http')}><Globe size={ico} /> HTTP</div>
+      <div className={item} onClick={() => spawn('postgres')}><Database size={ico} /> PostgreSQL</div>
+      <div className={item} onClick={() => spawn('browser')}><Compass size={ico} /> Browser</div>
+    </div>
   )
 }
 
