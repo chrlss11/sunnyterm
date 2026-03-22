@@ -272,6 +272,11 @@ export function InfiniteCanvas() {
   // Sort tiles for rendering (lowest zIndex first = rendered below)
   const sortedTiles = [...tiles].sort((a, b) => a.zIndex - b.zIndex)
 
+  const isDark = useStore((s) => s.isDark)
+  const gridSpacing = GRID_SPACING * zoom
+  const dotColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(138,138,150,0.3)'
+  const dotR = 0.75
+
   return (
     <div
       ref={containerRef}
@@ -285,17 +290,47 @@ export function InfiniteCanvas() {
       onMouseLeave={() => setMouseScreen(null)}
       style={{ touchAction: 'none' }}
     >
+      {/* Dot grid (screen-space, not affected by canvas scale) */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `radial-gradient(circle, ${dotColor} ${dotR}px, transparent ${dotR}px)`,
+          backgroundSize: `${gridSpacing}px ${gridSpacing}px`,
+          backgroundPosition: `${panX % gridSpacing}px ${panY % gridSpacing}px`
+        }}
+      />
+
+      {/* Glow layer near cursor */}
+      {mouseScreen && containerRef.current && (() => {
+        const rect = containerRef.current!.getBoundingClientRect()
+        const localX = mouseScreen.x - rect.left
+        const localY = mouseScreen.y - rect.top
+        return (
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              left: localX - GLOW_RADIUS,
+              top: localY - GLOW_RADIUS,
+              width: GLOW_RADIUS * 2,
+              height: GLOW_RADIUS * 2,
+              backgroundImage: `radial-gradient(circle, ${dotColor} ${dotR}px, transparent ${dotR}px)`,
+              backgroundSize: `${gridSpacing}px ${gridSpacing}px`,
+              backgroundPosition: `${(panX % gridSpacing) - (localX - GLOW_RADIUS)}px ${(panY % gridSpacing) - (localY - GLOW_RADIUS)}px`,
+              mask: 'radial-gradient(circle, black 0%, transparent 70%)',
+              WebkitMask: 'radial-gradient(circle, black 0%, transparent 70%)'
+            }}
+          />
+        )
+      })()}
+
       {/* Canvas transform layer */}
       <div
         style={{
           position: 'absolute',
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-          transformOrigin: '0 0',
-          willChange: 'transform'
+          transformOrigin: '0 0'
         }}
       >
-        {/* Dot grid */}
-        <DotGrid zoom={zoom} panX={panX} panY={panY} mouseScreen={mouseScreen} containerRef={containerRef} />
 
         {/* Tiles */}
         {sortedTiles.map((tile) => (
@@ -397,93 +432,7 @@ function LinkLines({ tiles, panX, panY, zoom }: LinkLinesProps) {
   )
 }
 
-// ── Dot grid background with radial hover glow ──────────────────────────────
+// ── Dot grid constants ───────────────────────────────────────────────────────
 
 const GRID_SPACING = 24
 const GLOW_RADIUS = 180
-
-interface DotGridProps {
-  zoom: number
-  panX: number
-  panY: number
-  mouseScreen: { x: number; y: number } | null
-  containerRef: React.RefObject<HTMLDivElement | null>
-}
-
-function DotGrid({ zoom, panX, panY, mouseScreen, containerRef }: DotGridProps) {
-  const isDark = useStore((s) => s.isDark)
-  const size = 8000
-  const dotR = Math.max(0.5, 1 / zoom)
-  const fill = isDark ? '#fff' : '#8a8a96'
-  const baseOpacity = isDark ? 0.15 : 0.3
-
-  // Convert mouse screen position to canvas-space for SVG glow
-  let mouseCanvasX: number | null = null
-  let mouseCanvasY: number | null = null
-  if (mouseScreen && containerRef.current) {
-    const rect = containerRef.current.getBoundingClientRect()
-    mouseCanvasX = (mouseScreen.x - rect.left - panX) / zoom
-    mouseCanvasY = (mouseScreen.y - rect.top - panY) / zoom
-  }
-
-  const glowR = GLOW_RADIUS / zoom
-  const hasGlow = mouseCanvasX !== null && mouseCanvasY !== null
-
-  return (
-    <>
-      {/* Base dot grid */}
-      <svg
-        style={{
-          position: 'absolute',
-          left: -size / 2,
-          top: -size / 2,
-          width: size,
-          height: size,
-          pointerEvents: 'none',
-          opacity: baseOpacity
-        }}
-      >
-        <defs>
-          <pattern id="dot-grid" x="0" y="0" width={GRID_SPACING} height={GRID_SPACING} patternUnits="userSpaceOnUse">
-            <circle cx={GRID_SPACING / 2} cy={GRID_SPACING / 2} r={dotR} fill={fill} />
-          </pattern>
-        </defs>
-        <rect width={size} height={size} fill="url(#dot-grid)" />
-      </svg>
-
-      {/* Glow layer: brighter dots near cursor */}
-      {hasGlow && (
-        <svg
-          style={{
-            position: 'absolute',
-            left: -size / 2,
-            top: -size / 2,
-            width: size,
-            height: size,
-            pointerEvents: 'none'
-          }}
-        >
-          <defs>
-            <pattern id="dot-grid-glow" x="0" y="0" width={GRID_SPACING} height={GRID_SPACING} patternUnits="userSpaceOnUse">
-              <circle cx={GRID_SPACING / 2} cy={GRID_SPACING / 2} r={dotR * 2.5} fill={fill} />
-            </pattern>
-            <radialGradient id="glow-mask-grad" cx={((mouseCanvasX ?? 0) + size / 2) / size} cy={((mouseCanvasY ?? 0) + size / 2) / size} r={glowR / size}>
-              <stop offset="0%" stopColor="white" stopOpacity="1" />
-              <stop offset="100%" stopColor="white" stopOpacity="0" />
-            </radialGradient>
-            <mask id="glow-mask">
-              <rect width={size} height={size} fill="url(#glow-mask-grad)" />
-            </mask>
-          </defs>
-          <rect
-            width={size}
-            height={size}
-            fill="url(#dot-grid-glow)"
-            mask="url(#glow-mask)"
-            opacity={isDark ? 0.5 : 0.5}
-          />
-        </svg>
-      )}
-    </>
-  )
-}

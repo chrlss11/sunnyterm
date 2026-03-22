@@ -4,7 +4,7 @@ import { SearchBar } from './search/SearchBar'
 import { WorkspacePicker } from './workspace/WorkspacePicker'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useStore, DEFAULT_WORKSPACE } from './store'
-import { Terminal, Globe, Database, Undo2, Redo2, Map, Search, Maximize, Sun, Moon, ZoomIn, ZoomOut, FolderOpen } from 'lucide-react'
+import { Terminal, Globe, Database, Undo2, Redo2, Map, Search, Sun, Moon, ZoomIn, ZoomOut, FolderOpen } from 'lucide-react'
 
 // ── Auto-save debounce (ms) ───────────────────────────────────────────────────
 const AUTO_SAVE_DEBOUNCE_MS = 2_000
@@ -119,7 +119,7 @@ function AppInner() {
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
 function Toolbar() {
-  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, fitAllTiles, toggleDark, zoomIn, zoomOut } = useStore()
+  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, toggleDark, zoomIn, zoomOut } = useStore()
   const undoStack = useStore((s) => s.undoStack)
   const redoStack = useStore((s) => s.redoStack)
   const showMinimap = useStore((s) => s.showMinimap)
@@ -133,7 +133,7 @@ function Toolbar() {
 
   return (
     <div
-      className="flex items-center gap-0.5 px-3 bg-toolbar shrink-0"
+      className="flex items-center gap-0.5 px-3 shrink-0"
       style={{ height: 44, WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* macOS traffic light spacer */}
@@ -186,10 +186,6 @@ function Toolbar() {
         </button>
         <button className={btn} onClick={zoomIn} title="Zoom in (⌘+)">
           <ZoomIn size={ico} />
-        </button>
-
-        <button className={btn} onClick={fitAllTiles} title="Fit all tiles">
-          <Maximize size={ico} />
         </button>
 
         <div className={sep} />
