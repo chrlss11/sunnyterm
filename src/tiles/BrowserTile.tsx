@@ -35,7 +35,7 @@ interface Props {
   tileId: string
 }
 
-export function BrowserTile({ tileId }: Props) {
+export const BrowserTile = React.memo(function BrowserTile({ tileId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
 
@@ -222,7 +222,7 @@ export function BrowserTile({ tileId }: Props) {
       </div>
     </div>
   )
-}
+})
 
 // ── Webview mouse guard ──────────────────────────────────────────────────────
 // Transparent overlay that only activates on right/middle click to allow
