@@ -40,25 +40,24 @@ export function BrowserTile({ tileId }: Props) {
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
 
   const existing = browserRegistry.get(tileId)
-  const [inputValue, setInputValue] = useState(existing?.currentUrl ?? '')
-  const [isLoading, setIsLoading] = useState(false)
-  const [canGoBack, setCanGoBack] = useState(false)
-  const [canGoForward, setCanGoForward] = useState(false)
-  const [hasNavigated, setHasNavigated] = useState(!!existing)
-
-  // Consume pending URL (from link click in terminal/webview)
-  useEffect(() => {
+  // Consume pending URL immediately (from link click in terminal/webview)
+  const pendingUrl = useRef<string | null>(null)
+  if (!existing) {
     const pending = useStore.getState().pendingBrowserUrl[tileId]
     if (pending) {
+      pendingUrl.current = pending
       useStore.setState((s) => {
         const next = { ...s.pendingBrowserUrl }
         delete next[tileId]
         return { pendingBrowserUrl: next }
       })
-      // Delay to ensure containerRef is ready
-      requestAnimationFrame(() => navigate(pending))
     }
-  }, [tileId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
+  const [inputValue, setInputValue] = useState(existing?.currentUrl ?? pendingUrl.current ?? '')
+  const [isLoading, setIsLoading] = useState(false)
+  const [canGoBack, setCanGoBack] = useState(false)
+  const [canGoForward, setCanGoForward] = useState(false)
+  const [hasNavigated, setHasNavigated] = useState(!!existing || !!pendingUrl.current)
 
   // Normalize URL — add protocol if missing
   const normalizeUrl = useCallback((raw: string): string => {
@@ -124,6 +123,20 @@ export function BrowserTile({ tileId }: Props) {
         }
         webviewRef.current = null
       }
+    }
+
+    // Auto-navigate if spawned with a pending URL
+    if (pendingUrl.current) {
+      const url = pendingUrl.current
+      pendingUrl.current = null
+      const normalized = normalizeUrl(url)
+      const wv = document.createElement('webview') as unknown as Electron.WebviewTag
+      wv.setAttribute('src', normalized)
+      wv.setAttribute('allowpopups', 'true')
+      wv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%'
+      containerRef.current.appendChild(wv as unknown as Node)
+      webviewRef.current = wv
+      browserRegistry.set(tileId, { webview: wv as unknown as HTMLElement, currentUrl: normalized })
     }
 
     return () => {
