@@ -53,7 +53,10 @@ export function InfiniteCanvas() {
     setSelectedIds, clearSelection
   } = useStore()
 
+  const viewMode = useStore((s) => s.viewMode)
+
   const containerRef = useRef<HTMLDivElement>(null)
+  const prevViewMode = useRef(viewMode)
   const isPanning = useRef(false)
   const spaceHeld = useRef(false)
   const lastMouse = useRef({ x: 0, y: 0 })
@@ -99,6 +102,31 @@ export function InfiniteCanvas() {
       window.removeEventListener('keyup', onKeyUp)
     }
   }, [])
+
+  // ── Force compositor repaint when returning from Focus mode ──────────────
+  // Chromium discards GPU textures for occluded layers. When the FocusView
+  // overlay unmounts, the canvas layers have stale textures. We force two
+  // distinct compositor states: a 1px pan nudge + translateZ hack, then
+  // restore on the next frame.
+
+  useEffect(() => {
+    if (prevViewMode.current === 'focus' && viewMode === 'canvas') {
+      const el = containerRef.current
+      // Phase 1: nudge pan + force layer rebuild
+      panBy(1, 0)
+      if (el) el.style.transform = 'translateZ(0.1px)'
+
+      const raf = requestAnimationFrame(() => {
+        // Phase 2: restore — two real compositor states guarantee repaint
+        panBy(-1, 0)
+        if (el) el.style.transform = ''
+      })
+
+      prevViewMode.current = viewMode
+      return () => cancelAnimationFrame(raf)
+    }
+    prevViewMode.current = viewMode
+  }, [viewMode, panBy])
 
   // ── Paste curl detection ──────────────────────────────────────────────────
 
