@@ -278,21 +278,23 @@ export const useStore = create<CanvasStore>()(
       const tileW = snapToGrid(640)
       const tileH = snapToGrid(396)
 
-      // Calculate position: cascade with small offset from last tile
       let cx: number, cy: number
       if (x != null || y != null) {
         cx = snapToGrid(x ?? 0)
         cy = snapToGrid(y ?? 0)
       } else {
-        // Place near the viewport center, cascading from existing tiles
-        const vpCenterX = (window.innerWidth / 2 - panX) / zoom - tileW / 2
-        const vpCenterY = ((window.innerHeight - 44) / 2 - panY) / zoom - tileH / 2
-        const CASCADE = 36
-        const offset = tiles.length * CASCADE
-        cx = snapToGrid(vpCenterX + (offset % (CASCADE * 8)))
-        cy = snapToGrid(vpCenterY + (offset % (CASCADE * 8)))
+        // Cascade: stack on top of last tile with a small diagonal offset
+        const last = tiles[tiles.length - 1]
+        if (last) {
+          cx = snapToGrid(last.x + 36)
+          cy = snapToGrid(last.y + 36)
+        } else {
+          cx = snapToGrid(60)
+          cy = snapToGrid(60)
+        }
       }
-      const { x: safeX, y: safeY } = findFreePosition(tiles, cx, cy, tileW, tileH)
+      const safeX = cx
+      const safeY = cy
       const tile: Tile = {
         id: nextId(),
         x: safeX,
