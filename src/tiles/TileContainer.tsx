@@ -4,7 +4,7 @@ import { TerminalTile } from './TerminalTile'
 import { HttpTile } from './HttpTile'
 import { PostgresTile } from './PostgresTile'
 import { BrowserTile } from './BrowserTile'
-import { FileViewerTile } from './FileViewerTile'
+import { FileViewerTile, resetFileViewerState } from './FileViewerTile'
 import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal } from 'lucide-react'
 import type { Tile } from '../types'
 
@@ -33,7 +33,7 @@ class TileErrorBoundary extends Component<{ children: React.ReactNode; tileId: s
           <p className="text-white/30 text-[10px] max-w-xs break-words">{this.state.error.message}</p>
           <button
             className="mt-2 px-3 py-1 text-xs bg-white/10 hover:bg-white/20 text-white/70 rounded transition-colors"
-            onClick={() => this.setState({ error: null })}
+            onClick={() => { resetFileViewerState(this.props.tileId); this.setState({ error: null }) }}
           >
             Retry
           </button>

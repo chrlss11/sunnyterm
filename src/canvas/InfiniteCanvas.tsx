@@ -66,6 +66,7 @@ export function InfiniteCanvas() {
   const [alignMenu, setAlignMenu] = useState<{ x: number; y: number } | null>(null)
   const [createMenu, setCreateMenu] = useState<{ x: number; y: number; canvasX: number; canvasY: number } | null>(null)
   const rightClickStart = useRef<{ x: number; y: number } | null>(null)
+  const clickStart = useRef<{ x: number; y: number; canvasX: number; canvasY: number } | null>(null)
 
   // Convert screen coords to canvas coords (accounting for container offset)
   const toCanvas = useCallback(
@@ -161,18 +162,13 @@ export function InfiniteCanvas() {
       })
 
       if (!hit) {
-        // Double-click on canvas background = spawn terminal
-        const now = Date.now()
-        if (now - lastClickTime.current < 300) {
-          spawnTile('terminal', canvas.x - 320, canvas.y - 200)
-          lastClickTime.current = 0
-          return
-        }
-        lastClickTime.current = now
-
-        // Start lasso selection
         clearSelection()
         focusTile(null)
+
+        // Record click start for distinguishing click vs lasso drag
+        clickStart.current = { x: e.clientX, y: e.clientY, canvasX: canvas.x, canvasY: canvas.y }
+
+        // Start lasso selection
         isLassoing.current = true
         lassoStart.current = { x: canvas.x, y: canvas.y }
         setLasso({ x1: canvas.x, y1: canvas.y, x2: canvas.x, y2: canvas.y })
@@ -256,7 +252,7 @@ export function InfiniteCanvas() {
   )
 
   const onPointerUp = useCallback(
-    () => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (isPanning.current) {
         isPanning.current = false
         if (containerRef.current) containerRef.current.style.cursor = 'default'
@@ -264,6 +260,17 @@ export function InfiniteCanvas() {
       if (isLassoing.current) {
         isLassoing.current = false
         setLasso(null)
+
+        // If the user didn't drag (click on empty canvas), open the create menu
+        const start = clickStart.current
+        clickStart.current = null
+        if (start) {
+          const dx = Math.abs(e.clientX - start.x)
+          const dy = Math.abs(e.clientY - start.y)
+          if (dx < 4 && dy < 4) {
+            setCreateMenu({ x: e.clientX, y: e.clientY, canvasX: start.canvasX, canvasY: start.canvasY })
+          }
+        }
       }
       endDrag()
     },
@@ -308,21 +315,14 @@ export function InfiniteCanvas() {
       if (start) {
         const dx = Math.abs(e.clientX - start.x)
         const dy = Math.abs(e.clientY - start.y)
-        if (dx > 3 || dy > 3) return // was a drag, not a click
+        if (dx > 3 || dy > 3) return
       }
 
       if (selectedIds.length >= 2) {
         setAlignMenu({ x: e.clientX, y: e.clientY })
-      } else {
-        const canvas = toCanvas(e.clientX, e.clientY)
-        const sorted = [...tiles].sort((a, b) => b.zIndex - a.zIndex)
-        const hit = sorted.find((t) => hitTest(canvas.x, canvas.y, t).inTile)
-        if (!hit) {
-          setCreateMenu({ x: e.clientX, y: e.clientY, canvasX: canvas.x, canvasY: canvas.y })
-        }
       }
     },
-    [linkingFromId, cancelLinking, selectedIds, tiles, toCanvas]
+    [linkingFromId, cancelLinking, selectedIds]
   )
 
   // ── Render ────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useStore } from '../store'
-import { Folder, FolderOpen as FolderOpenIcon, File, FileText, ChevronRight, ChevronDown, AlertCircle, FolderSearch, Terminal } from 'lucide-react'
+import { toast } from 'sonner'
+import { Folder, FolderOpen as FolderOpenIcon, ChevronRight, ChevronDown, AlertCircle, FolderSearch, Terminal, Copy } from 'lucide-react'
 import { highlightCode, getLanguageFromFilename } from '../lib/syntaxHighlight'
 import type { ThemeName } from '../lib/themes'
 import type { FsEntry, FsFileResult } from '../types'
@@ -18,6 +19,11 @@ interface FileViewerState {
 }
 
 const stateRegistry = new Map<string, FileViewerState>()
+
+/** Clear persisted state so a fresh mount starts clean */
+export function resetFileViewerState(tileId: string) {
+  stateRegistry.delete(tileId)
+}
 
 interface Props {
   tileId: string
@@ -61,7 +67,7 @@ export function FileViewerTile({ tileId }: Props) {
   }, [tileId])
 
   // Context menu state
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; dirPath: string } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string; isDir: boolean } | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
 
   // Close context menu on outside click
@@ -195,22 +201,27 @@ export function FileViewerTile({ tileId }: Props) {
 
   const rootRef = useRef<HTMLDivElement>(null)
 
-  // Right-click on directory
-  const handleDirContextMenu = useCallback((e: React.MouseEvent, dirPath: string) => {
+  // Copy path to clipboard
+  const copyPath = useCallback((path: string) => {
+    navigator.clipboard.writeText(path)
+    toast.success('Path copied')
+    setCtxMenu(null)
+  }, [])
+
+  // Right-click on file or directory
+  const handleContextMenu = useCallback((e: React.MouseEvent, path: string, isDir: boolean) => {
     e.preventDefault()
     e.stopPropagation()
-    // Use nativeEvent offset relative to the clicked element, then add its position in the root
     const target = e.currentTarget as HTMLElement
     const root = rootRef.current
     if (!root) return
     const rootRect = root.getBoundingClientRect()
     const targetRect = target.getBoundingClientRect()
-    // Scale factor: canvas zoom causes getBoundingClientRect to be scaled
     const scaleX = root.offsetWidth / rootRect.width
     const scaleY = root.offsetHeight / rootRect.height
     const x = (targetRect.left - rootRect.left) * scaleX + (e.clientX - targetRect.left) * scaleX
     const y = (targetRect.top - rootRect.top) * scaleY + (e.clientY - targetRect.top) * scaleY
-    setCtxMenu({ x, y, dirPath })
+    setCtxMenu({ x, y, path, isDir })
   }, [])
 
   // Sidebar resize
@@ -320,7 +331,7 @@ export function FileViewerTile({ tileId }: Props) {
                 selectedFile={selectedFile}
                 onToggleDir={toggleDir}
                 onOpenFile={openFile}
-                onDirContextMenu={handleDirContextMenu}
+                onContextMenu={handleContextMenu}
                 depth={0}
               />
             )}
@@ -356,7 +367,10 @@ export function FileViewerTile({ tileId }: Props) {
 
           {selectedFile && !loading && fileContent?.ok && fileContent.isBinary && (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-text-muted">
-              <File size={24} />
+              <svg className="w-6 h-6" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 1h5.5L13 4.5V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1Z" />
+                <path d="M9.5 1v3.5H13" />
+              </svg>
               <span>Binary file ({formatSize(fileContent.size || 0)})</span>
             </div>
           )}
@@ -372,9 +386,23 @@ export function FileViewerTile({ tileId }: Props) {
                 <span className="text-text-muted ml-auto shrink-0">
                   {formatSize(fileContent.size || 0)} · {lineCount(fileContent.content || '')} lines
                 </span>
+                <button
+                  className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/8 text-text-muted hover:text-text-primary transition-colors shrink-0 cursor-pointer"
+                  onClick={() => { navigator.clipboard.writeText(fileContent.content || ''); toast.success('Copied to clipboard') }}
+                  title="Copy file contents"
+                >
+                  <Copy size={13} />
+                </button>
               </div>
               {/* Code */}
-              <div className="flex-1 overflow-auto">
+              <div
+                className="flex-1 overflow-auto cursor-text"
+                style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+              >
                 <div
                   className="syntax-content text-[12px] leading-[20px] p-3
                     [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0
@@ -390,25 +418,35 @@ export function FileViewerTile({ tileId }: Props) {
         </div>
       </div>
 
-      {/* Directory context menu */}
+      {/* Context menu */}
       {ctxMenu && (
         <div
           ref={ctxRef}
-          className="absolute w-44 rounded-lg border border-border bg-tile shadow-xl py-1 z-[99999]"
+          className="absolute w-48 rounded-lg border border-border bg-tile shadow-xl py-1 z-[99999]"
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
         >
           <div
             className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors"
-            onClick={() => openTerminalAt(ctxMenu.dirPath)}
+            onClick={() => copyPath(ctxMenu.path)}
           >
-            <Terminal size={12} /> Open Terminal Here
+            <Copy size={12} /> Copy Path
           </div>
-          <div
-            className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors"
-            onClick={() => { navigateToDir(ctxMenu.dirPath); setCtxMenu(null) }}
-          >
-            <FolderOpenIcon size={12} /> Open as Root
-          </div>
+          {ctxMenu.isDir && (
+            <>
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                onClick={() => openTerminalAt(ctxMenu.path)}
+              >
+                <Terminal size={12} /> Open Terminal Here
+              </div>
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                onClick={() => { navigateToDir(ctxMenu.path); setCtxMenu(null) }}
+              >
+                <FolderOpenIcon size={12} /> Open as Root
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -424,11 +462,11 @@ interface TreeNodesProps {
   selectedFile: string | null
   onToggleDir: (path: string) => void
   onOpenFile: (path: string) => void
-  onDirContextMenu: (e: React.MouseEvent, path: string) => void
+  onContextMenu: (e: React.MouseEvent, path: string, isDir: boolean) => void
   depth: number
 }
 
-function TreeNodes({ entries, expandedDirs, dirContents, selectedFile, onToggleDir, onOpenFile, onDirContextMenu, depth }: TreeNodesProps) {
+function TreeNodes({ entries, expandedDirs, dirContents, selectedFile, onToggleDir, onOpenFile, onContextMenu, depth }: TreeNodesProps) {
   return (
     <>
       {entries.map((entry) => (
@@ -440,7 +478,7 @@ function TreeNodes({ entries, expandedDirs, dirContents, selectedFile, onToggleD
           selectedFile={selectedFile}
           onToggleDir={onToggleDir}
           onOpenFile={onOpenFile}
-          onDirContextMenu={onDirContextMenu}
+          onContextMenu={onContextMenu}
           depth={depth}
         />
       ))}
@@ -455,11 +493,11 @@ interface TreeNodeProps {
   selectedFile: string | null
   onToggleDir: (path: string) => void
   onOpenFile: (path: string) => void
-  onDirContextMenu: (e: React.MouseEvent, path: string) => void
+  onContextMenu: (e: React.MouseEvent, path: string, isDir: boolean) => void
   depth: number
 }
 
-function TreeNode({ entry, expandedDirs, dirContents, selectedFile, onToggleDir, onOpenFile, onDirContextMenu, depth }: TreeNodeProps) {
+function TreeNode({ entry, expandedDirs, dirContents, selectedFile, onToggleDir, onOpenFile, onContextMenu, depth }: TreeNodeProps) {
   const isExpanded = expandedDirs.has(entry.path)
   const isSelected = selectedFile === entry.path
   const indent = depth * 16 + 8
@@ -472,7 +510,7 @@ function TreeNode({ entry, expandedDirs, dirContents, selectedFile, onToggleDir,
           className="flex items-center gap-1.5 py-[3px] pr-2 cursor-pointer hover:bg-black/5 dark:hover:bg-white/6 transition-colors"
           style={{ paddingLeft: indent }}
           onClick={() => onToggleDir(entry.path)}
-          onContextMenu={(e) => onDirContextMenu(e, entry.path)}
+          onContextMenu={(e) => onContextMenu(e, entry.path, true)}
         >
           {isExpanded ? (
             <ChevronDown size={12} className="text-text-muted shrink-0" />
@@ -494,7 +532,7 @@ function TreeNode({ entry, expandedDirs, dirContents, selectedFile, onToggleDir,
             selectedFile={selectedFile}
             onToggleDir={onToggleDir}
             onOpenFile={onOpenFile}
-            onDirContextMenu={onDirContextMenu}
+            onContextMenu={onContextMenu}
             depth={depth + 1}
           />
         )}
@@ -511,6 +549,7 @@ function TreeNode({ entry, expandedDirs, dirContents, selectedFile, onToggleDir,
       }`}
       style={{ paddingLeft: indent + 16 }}
       onClick={() => onOpenFile(entry.path)}
+      onContextMenu={(e) => onContextMenu(e, entry.path, false)}
     >
       <FileIcon filename={entry.name} />
       <span className="truncate">{entry.name}</span>
@@ -518,34 +557,109 @@ function TreeNode({ entry, expandedDirs, dirContents, selectedFile, onToggleDir,
   )
 }
 
-// ── File icon by extension ────────────────────────────────────────────────────
+// ── File icon by extension (VS Code-style colored icons) ─────────────────────
 
-const EXT_COLORS: Record<string, string> = {
-  ts: 'text-blue-400', tsx: 'text-blue-400',
-  js: 'text-yellow-400', jsx: 'text-yellow-400',
-  json: 'text-yellow-500',
-  py: 'text-green-400',
-  rb: 'text-red-400',
-  rs: 'text-orange-400',
-  go: 'text-cyan-400',
-  java: 'text-red-500',
-  css: 'text-pink-400', scss: 'text-pink-400',
-  html: 'text-orange-500', htm: 'text-orange-500',
-  md: 'text-text-secondary', mdx: 'text-text-secondary',
-  vue: 'text-green-500', svelte: 'text-orange-500',
-  swift: 'text-orange-400', kt: 'text-purple-400',
-  yaml: 'text-red-300', yml: 'text-red-300',
-  sh: 'text-green-300', bash: 'text-green-300',
-  sql: 'text-blue-300',
-  toml: 'text-gray-400',
-  xml: 'text-orange-300', svg: 'text-yellow-300'
+interface FileTypeIcon {
+  color: string
+  /** 2-3 char label rendered inside the icon */
+  badge: string
+}
+
+const FILE_TYPE_ICONS: Record<string, FileTypeIcon> = {
+  ts:     { color: '#3178c6', badge: 'TS' },
+  tsx:    { color: '#3178c6', badge: 'TX' },
+  js:     { color: '#f0db4f', badge: 'JS' },
+  jsx:    { color: '#f0db4f', badge: 'JX' },
+  mjs:    { color: '#f0db4f', badge: 'MJ' },
+  cjs:    { color: '#f0db4f', badge: 'CJ' },
+  json:   { color: '#cbcb41', badge: '{}' },
+  py:     { color: '#4584b6', badge: 'PY' },
+  rb:     { color: '#cc342d', badge: 'RB' },
+  rs:     { color: '#dea584', badge: 'RS' },
+  go:     { color: '#00add8', badge: 'GO' },
+  java:   { color: '#e76f00', badge: 'JV' },
+  css:    { color: '#56b6c2', badge: 'CS' },
+  scss:   { color: '#cd6799', badge: 'SC' },
+  less:   { color: '#1d365d', badge: 'LE' },
+  html:   { color: '#e34c26', badge: '<>' },
+  htm:    { color: '#e34c26', badge: '<>' },
+  vue:    { color: '#41b883', badge: 'VU' },
+  svelte: { color: '#ff3e00', badge: 'SV' },
+  md:     { color: '#8a8a8a', badge: 'MD' },
+  mdx:    { color: '#8a8a8a', badge: 'MX' },
+  yaml:   { color: '#cb4a32', badge: 'YM' },
+  yml:    { color: '#cb4a32', badge: 'YM' },
+  toml:   { color: '#9c4121', badge: 'TM' },
+  sh:     { color: '#4eaa25', badge: '$_' },
+  bash:   { color: '#4eaa25', badge: '$_' },
+  zsh:    { color: '#4eaa25', badge: '$_' },
+  fish:   { color: '#4eaa25', badge: '$_' },
+  sql:    { color: '#e38c00', badge: 'SQ' },
+  swift:  { color: '#f05138', badge: 'SW' },
+  kt:     { color: '#7f52ff', badge: 'KT' },
+  dart:   { color: '#00b4ab', badge: 'DT' },
+  xml:    { color: '#e37933', badge: 'XM' },
+  svg:    { color: '#ffb13b', badge: 'SG' },
+  php:    { color: '#777bb3', badge: 'PH' },
+  c:      { color: '#555555', badge: 'C' },
+  cpp:    { color: '#004482', badge: 'C+' },
+  h:      { color: '#555555', badge: 'H' },
+  hpp:    { color: '#004482', badge: 'H+' },
+  cs:     { color: '#68217a', badge: 'C#' },
+  r:      { color: '#276dc3', badge: 'R' },
+  lua:    { color: '#000080', badge: 'LU' },
+  dockerfile: { color: '#2496ed', badge: 'DK' },
+  graphql:{ color: '#e10098', badge: 'GQ' },
+  gql:    { color: '#e10098', badge: 'GQ' },
+  prisma: { color: '#2d3748', badge: 'PR' },
+  env:    { color: '#ecd53f', badge: '.E' },
+  gitignore: { color: '#f05032', badge: 'GI' },
+  lock:   { color: '#8a8a8a', badge: 'LK' },
+  log:    { color: '#8a8a8a', badge: 'LG' },
+  txt:    { color: '#8a8a8a', badge: 'TX' },
+}
+
+/** Map certain filenames (without extension or special names) to icons */
+const FILENAME_ICONS: Record<string, FileTypeIcon> = {
+  dockerfile:     { color: '#2496ed', badge: 'DK' },
+  'docker-compose.yml': { color: '#2496ed', badge: 'DK' },
+  'docker-compose.yaml': { color: '#2496ed', badge: 'DK' },
+  makefile:       { color: '#6d8086', badge: 'MK' },
+  '.gitignore':   { color: '#f05032', badge: 'GI' },
+  '.gitmodules':  { color: '#f05032', badge: 'GI' },
+  '.env':         { color: '#ecd53f', badge: '.E' },
+  '.env.local':   { color: '#ecd53f', badge: '.E' },
+  '.env.example': { color: '#ecd53f', badge: '.E' },
+  '.eslintrc':    { color: '#4b32c3', badge: 'ES' },
+  '.prettierrc':  { color: '#56b3b4', badge: 'PR' },
+  'package.json': { color: '#cb3837', badge: 'NP' },
+  'tsconfig.json': { color: '#3178c6', badge: 'TS' },
+  'vite.config.ts': { color: '#646cff', badge: 'VI' },
+  'vite.config.js': { color: '#646cff', badge: 'VI' },
 }
 
 function FileIcon({ filename }: { filename: string }) {
-  const ext = filename.split('.').pop()?.toLowerCase() || ''
-  const color = EXT_COLORS[ext]
-  if (color) return <FileText size={13} className={`${color} shrink-0`} />
-  return <File size={13} className="text-text-muted shrink-0" />
+  const lower = filename.toLowerCase()
+  const icon = FILENAME_ICONS[lower]
+    || FILE_TYPE_ICONS[lower.split('.').pop() || '']
+
+  if (!icon) {
+    // Generic file icon
+    return (
+      <svg className="w-[14px] h-[14px] shrink-0" viewBox="0 0 16 16" fill="none">
+        <path d="M4 1h5.5L13 4.5V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1Z" fill="none" stroke="var(--text-muted)" strokeWidth="1" />
+        <path d="M9.5 1v3.5H13" fill="none" stroke="var(--text-muted)" strokeWidth="1" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg className="w-[14px] h-[14px] shrink-0" viewBox="0 0 16 16" fill="none">
+      <path d="M4 1h5.5L13 4.5V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1Z" fill={icon.color} fillOpacity="0.15" stroke={icon.color} strokeWidth="1" />
+      <path d="M9.5 1v3.5H13" fill="none" stroke={icon.color} strokeWidth="1" />
+      <text x="8" y="12.5" textAnchor="middle" fill={icon.color} fontSize="5" fontWeight="700" fontFamily="system-ui, sans-serif">{icon.badge}</text>
+    </svg>
+  )
 }
 
 // ── Language badge ───────────────────────────────────────────────────────────

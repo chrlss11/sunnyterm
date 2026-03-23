@@ -1,4 +1,4 @@
-import { createHighlighter, type Highlighter } from 'shiki'
+import { createHighlighter, type Highlighter, type BundledLanguage } from 'shiki'
 import type { ThemeName } from './themes'
 
 let highlighter: Highlighter | null = null
@@ -13,12 +13,13 @@ const SHIKI_THEMES: Record<ThemeName, string> = {
 
 const EXT_TO_LANG: Record<string, string> = {
   js: 'javascript', jsx: 'jsx', ts: 'typescript', tsx: 'tsx',
+  mjs: 'javascript', cjs: 'javascript',
   py: 'python', rb: 'ruby', rs: 'rust', go: 'go',
   java: 'java', kt: 'kotlin', swift: 'swift',
   c: 'c', cpp: 'cpp', h: 'c', hpp: 'cpp',
   cs: 'csharp', php: 'php', lua: 'lua',
   sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash',
-  json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'toml',
+  json: 'json', jsonc: 'jsonc', yaml: 'yaml', yml: 'yaml', toml: 'toml',
   xml: 'xml', html: 'html', htm: 'html', svg: 'xml',
   css: 'css', scss: 'scss', less: 'less',
   md: 'markdown', mdx: 'mdx',
@@ -33,13 +34,19 @@ const EXT_TO_LANG: Record<string, string> = {
   txt: 'text', log: 'text', csv: 'text'
 }
 
+// Start with a small core set of langs for fast init, load others on demand
+const CORE_LANGS: BundledLanguage[] = [
+  'javascript', 'typescript', 'tsx', 'jsx', 'json',
+  'html', 'css', 'bash', 'python', 'markdown'
+]
+
 async function getHighlighter(): Promise<Highlighter> {
   if (highlighter) return highlighter
   if (initPromise) return initPromise
 
   initPromise = createHighlighter({
     themes: ['github-dark', 'github-light', 'monokai', 'dracula'],
-    langs: Object.values(EXT_TO_LANG).filter((v, i, a) => a.indexOf(v) === i && v !== 'text')
+    langs: CORE_LANGS
   })
 
   highlighter = await initPromise
@@ -58,42 +65,40 @@ export function getLanguageFromFilename(filename: string): string {
   return EXT_TO_LANG[ext] || 'text'
 }
 
+function escapeHtml(code: string): string {
+  return code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 export async function highlightCode(
   code: string,
   lang: string,
   appTheme: ThemeName
 ): Promise<string> {
   if (lang === 'text' || code.length > 100_000) {
-    // Plain text fallback
-    const escaped = code
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-    return `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;">${escaped}</pre>`
+    return `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;">${escapeHtml(code)}</pre>`
   }
 
   try {
     const h = await getHighlighter()
     const theme = SHIKI_THEMES[appTheme] || 'github-dark'
 
-    // Check if language is loaded
+    // Lazy-load language if not yet loaded
     const loadedLangs = h.getLoadedLanguages()
-    const effectiveLang = loadedLangs.includes(lang as any) ? lang : 'text'
-
-    if (effectiveLang === 'text') {
-      const escaped = code
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-      return `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;">${escaped}</pre>`
+    if (!loadedLangs.includes(lang as any)) {
+      try {
+        await h.loadLanguage(lang as BundledLanguage)
+      } catch {
+        // Language not available in shiki bundle — fall through to plain text
+        return `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;">${escapeHtml(code)}</pre>`
+      }
     }
 
-    return h.codeToHtml(code, { lang: effectiveLang, theme })
-  } catch {
-    const escaped = code
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-    return `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;">${escaped}</pre>`
+    return h.codeToHtml(code, { lang, theme })
+  } catch (err) {
+    console.warn('[syntaxHighlight] failed:', err)
+    return `<pre style="margin:0;white-space:pre-wrap;word-break:break-all;">${escapeHtml(code)}</pre>`
   }
 }

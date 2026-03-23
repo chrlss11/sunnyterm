@@ -14,6 +14,7 @@ import { InputInterceptor } from '../lib/inputInterceptor'
 import { GhostTextRenderer } from '../lib/ghostTextRenderer'
 import { initHistory, addCommand, findMatch } from '../lib/commandHistory'
 import { CompletionDropdown, type CompletionItem } from './CompletionDropdown'
+import { TerminalShortcuts } from './TerminalShortcuts'
 import { THEMES, type ThemeName } from '../lib/themes'
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -439,6 +440,8 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
           isDark={isDark}
         />
       )}
+
+      {exitInfo === null && <TerminalShortcuts tileId={tileId} />}
 
       {exitInfo !== null && (
         <div
