@@ -335,7 +335,10 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
 
   useEffect(() => {
     if (focusedId === tileId && termRef.current) {
+      // Immediate focus + delayed focus to handle re-render timing
       termRef.current.focus()
+      const t = setTimeout(() => termRef.current?.focus(), 50)
+      return () => clearTimeout(t)
     }
   }, [focusedId, tileId])
 
