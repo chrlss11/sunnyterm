@@ -137,6 +137,7 @@ export function InfiniteCanvas() {
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (useStore.getState().viewMode === 'focus') return
       setAlignMenu(null)
       setCreateMenu(null)
 
@@ -281,6 +282,7 @@ export function InfiniteCanvas() {
 
   const onWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
+      if (useStore.getState().viewMode === 'focus') return
       e.preventDefault()
       if (e.metaKey || e.ctrlKey) {
         // Pinch-to-zoom (ctrlKey) or Cmd+scroll (metaKey):

@@ -6,6 +6,7 @@ import { PostgresTile } from './PostgresTile'
 import { BrowserTile } from './BrowserTile'
 import { FileViewerTile, resetFileViewerState } from './FileViewerTile'
 import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal } from 'lucide-react'
+import { TileKindIcon } from './TileKindIcon'
 import type { Tile } from '../types'
 
 export const TITLE_BAR_H = 28
@@ -195,8 +196,8 @@ export function TileContainer({ tile, isSelected }: Props) {
           onDoubleClick={handleTitleDoubleClick}
           onContextMenu={handleContextMenu}
         >
-          {/* Kind indicator dot */}
-          <KindDot kind={tile.kind} isExited={isExited} isFocused={isFocused} />
+          {/* Kind icon */}
+          <TileKindIcon kind={tile.kind} active={isFocused} exited={isExited} size={13} />
 
           {/* Title */}
           {isRenaming ? (
@@ -321,13 +322,3 @@ const ContextMenu = React.forwardRef<HTMLDivElement, CtxMenuProps>(function Cont
   )
 })
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function KindDot({ kind, isExited, isFocused }: { kind: Tile['kind']; isExited: boolean; isFocused: boolean }) {
-  const colors = isExited
-    ? 'bg-red-400/60'
-    : !isFocused
-      ? 'bg-black/15 dark:bg-white/20'
-      : { terminal: 'bg-green-400', http: 'bg-blue-400', postgres: 'bg-purple-400', browser: 'bg-orange-400', file: 'bg-amber-400' }[kind]
-  return <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${colors}`} />
-}

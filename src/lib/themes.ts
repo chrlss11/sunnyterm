@@ -20,6 +20,7 @@ export interface ThemeDef {
     textSecondary: string
     textMuted: string
     border: string
+    primary: string
   }
   /** xterm.js terminal color scheme */
   terminal: {
@@ -61,7 +62,8 @@ export const THEMES: Record<ThemeName, ThemeDef> = {
       textPrimary: '#e0e0e8',
       textSecondary: 'rgba(255, 255, 255, 0.7)',
       textMuted: 'rgba(255, 255, 255, 0.4)',
-      border: 'rgba(255, 255, 255, 0.08)'
+      border: 'rgba(255, 255, 255, 0.08)',
+      primary: '#a0a0ff'
     },
     terminal: {
       background: '#1B1D1F',
@@ -101,7 +103,8 @@ export const THEMES: Record<ThemeName, ThemeDef> = {
       textPrimary: '#111827',
       textSecondary: '#4b5563',
       textMuted: '#9ca3af',
-      border: 'rgba(0, 0, 0, 0.15)'
+      border: 'rgba(0, 0, 0, 0.15)',
+      primary: '#0366d6'
     },
     terminal: {
       background: '#ffffff',
@@ -141,7 +144,8 @@ export const THEMES: Record<ThemeName, ThemeDef> = {
       textPrimary: '#f0e6d6',
       textSecondary: 'rgba(240, 230, 214, 0.7)',
       textMuted: 'rgba(240, 230, 214, 0.4)',
-      border: 'rgba(210, 170, 120, 0.15)'
+      border: 'rgba(210, 170, 120, 0.15)',
+      primary: '#e8a44a'
     },
     terminal: {
       background: '#231e17',
@@ -181,7 +185,8 @@ export const THEMES: Record<ThemeName, ThemeDef> = {
       textPrimary: '#f0dce6',
       textSecondary: 'rgba(240, 220, 230, 0.7)',
       textMuted: 'rgba(240, 220, 230, 0.4)',
-      border: 'rgba(180, 100, 140, 0.15)'
+      border: 'rgba(180, 100, 140, 0.15)',
+      primary: '#c45a7c'
     },
     terminal: {
       background: '#1e1219',
@@ -223,6 +228,7 @@ export function applyThemeCss(theme: ThemeDef): void {
   root.style.setProperty('--text-secondary', theme.css.textSecondary)
   root.style.setProperty('--text-muted', theme.css.textMuted)
   root.style.setProperty('--border', theme.css.border)
+  root.style.setProperty('--primary', theme.css.primary)
 
   // Toggle .dark class for Tailwind dark variant
   root.classList.toggle('dark', theme.isDark)

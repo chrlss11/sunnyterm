@@ -6,6 +6,7 @@ import { PostgresTile } from '../tiles/PostgresTile'
 import { BrowserTile } from '../tiles/BrowserTile'
 import { FileViewerTile } from '../tiles/FileViewerTile'
 import { MoreHorizontal, Pencil, Copy, RotateCcw, ClipboardCopy, Link, X } from 'lucide-react'
+import { TileKindIcon } from '../tiles/TileKindIcon'
 import type { Tile } from '../types'
 
 const TITLE_BAR_H = 36
@@ -144,11 +145,11 @@ export function FocusView() {
   }, [])
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="w-full h-full flex flex-col overflow-hidden" style={{ overscrollBehavior: 'contain' }}>
       {/* Tab bar */}
       <div
         className="shrink-0 flex items-center gap-0.5 px-2 overflow-x-auto"
-        style={{ height: TAB_BAR_H, scrollbarWidth: 'none' }}
+        style={{ height: TAB_BAR_H, scrollbarWidth: 'none', overscrollBehavior: 'contain' }}
       >
         {sorted.map((tile) => {
           const isFocused = tile.id === focusedId
@@ -163,14 +164,14 @@ export function FocusView() {
               onDragOver={(e) => handleDragOver(e, tile.id)}
               onDrop={(e) => handleDrop(e, tile.id)}
               onDragEnd={handleDragEnd}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] shrink-0 cursor-grab active:cursor-grabbing transition-all border ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] shrink-0 cursor-grab active:cursor-grabbing border transition-colors ${
                 isFocused
-                  ? 'border-white/25 text-text-primary'
-                  : 'border-border text-text-muted hover:text-text-secondary'
-              } ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? 'border-white/40 scale-105' : ''}`}
+                  ? 'border-white/10 text-text-primary'
+                  : 'border-transparent text-text-muted hover:text-text-secondary'
+              } ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? '!border-white/40 scale-105' : ''}`}
               onClick={() => focusTile(tile.id)}
             >
-              <KindDot kind={tile.kind} isExited={isExited} isFocused={isFocused} small />
+              <TileKindIcon kind={tile.kind} active={isFocused} exited={isExited} size={11} />
               <span className="truncate max-w-[100px]">{tile.name}</span>
             </button>
           )
@@ -182,7 +183,7 @@ export function FocusView() {
         {/* Left nav button */}
         {sorted.length > 1 && (
           <button
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-surface/80 backdrop-blur border border-border flex items-center justify-center cursor-pointer hover:bg-surface transition-colors"
+            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-lg bg-surface/80 backdrop-blur border border-border flex items-center justify-center cursor-pointer hover:bg-surface transition-colors"
             onClick={goPrev}
           >
             <svg className="w-4 h-4 text-text-secondary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -194,7 +195,7 @@ export function FocusView() {
         {/* Right nav button */}
         {sorted.length > 1 && (
           <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-surface/80 backdrop-blur border border-border flex items-center justify-center cursor-pointer hover:bg-surface transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-lg bg-surface/80 backdrop-blur border border-border flex items-center justify-center cursor-pointer hover:bg-surface transition-colors"
             onClick={goNext}
           >
             <svg className="w-4 h-4 text-text-secondary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -207,7 +208,7 @@ export function FocusView() {
         <div
           ref={scrollRef}
           className="w-full h-full overflow-x-auto overflow-y-hidden flex items-stretch"
-          style={{ scrollSnapType: 'x mandatory', scrollbarWidth: 'none' }}
+          style={{ scrollSnapType: 'x mandatory', scrollbarWidth: 'none', overscrollBehavior: 'contain' }}
         >
           <div className="flex items-stretch shrink-0" style={{ gap: 0 }}>
             {/* Left padding to center first card */}
@@ -355,7 +356,7 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
           style={{ height: TITLE_BAR_H, userSelect: 'none' }}
           onDoubleClick={handleTitleDoubleClick}
         >
-          <KindDot kind={tile.kind} isExited={isExited} isFocused={isFocused} />
+          <TileKindIcon kind={tile.kind} active={isFocused} exited={isExited} size={13} />
 
           {isRenaming ? (
             <input
@@ -430,16 +431,6 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-function KindDot({ kind, isExited, isFocused, small }: { kind: Tile['kind']; isExited: boolean; isFocused: boolean; small?: boolean }) {
-  const colors = isExited
-    ? 'bg-red-400/60'
-    : !isFocused
-      ? 'bg-black/15 dark:bg-white/20'
-      : { terminal: 'bg-green-400', http: 'bg-blue-400', postgres: 'bg-purple-400', browser: 'bg-orange-400', file: 'bg-amber-400' }[kind]
-  const size = small ? 'w-1.5 h-1.5' : 'w-2.5 h-2.5'
-  return <div className={`${size} rounded-full shrink-0 ${colors}`} />
-}
 
 function CtxItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
   return (

@@ -30,6 +30,28 @@ function AppInner() {
   const viewMode = useStore((s) => s.viewMode)
   const { initFromPersisted, toggleShortcuts, toggleConfirmClear, clearCanvas } = useStore()
   const initializedRef = useRef(false)
+  const mainRef = useRef<HTMLDivElement>(null)
+
+  // ── Reset scroll positions when returning to canvas ────────────────────────
+  useEffect(() => {
+    if (viewMode === 'canvas' && mainRef.current) {
+      // Reset any stale scroll that leaked from FocusView
+      mainRef.current.scrollLeft = 0
+      mainRef.current.scrollTop = 0
+      // Also reset all scrollable children
+      const scrollables = mainRef.current.querySelectorAll('*')
+      scrollables.forEach((el) => {
+        if (el.scrollLeft !== 0 || el.scrollTop !== 0) {
+          // Only reset elements that aren't the canvas transform layer
+          const isCanvasContent = el.closest('[style*="transform"]')
+          if (!isCanvasContent) {
+            el.scrollLeft = 0
+            el.scrollTop = 0
+          }
+        }
+      })
+    }
+  }, [viewMode])
 
   // ── Apply theme CSS variables on theme change ─────────────────────────────
   useEffect(() => {
@@ -93,11 +115,17 @@ function AppInner() {
       <Toolbar />
 
       {/* Main view — InfiniteCanvas always mounted (in-flow), FocusView overlays on top */}
-      <div className="flex-1 min-h-0 relative">
+      <div ref={mainRef} className="flex-1 min-h-0 relative overflow-hidden">
         <InfiniteCanvas />
         <SearchBar />
         {viewMode === 'focus' && (
-          <div className="absolute inset-0 z-10 bg-canvas">
+          <div
+            className="absolute inset-0 z-10 bg-canvas overflow-hidden"
+            onWheel={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerMove={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+          >
             <FocusView />
           </div>
         )}

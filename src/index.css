@@ -43,6 +43,7 @@
   --text-secondary: rgba(255, 255, 255, 0.7);
   --text-muted: rgba(255, 255, 255, 0.4);
   --border: rgba(255, 255, 255, 0.08);
+  --primary: #a0a0ff;
 }
 
 @keyframes fade-in {
