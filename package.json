@@ -1,8 +1,12 @@
 {
   "name": "sunnyterm",
   "productName": "SunnyTerm",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Infinite canvas terminal emulator",
+  "author": {
+    "name": "Christian Rojas",
+    "email": "chrlss11@users.noreply.github.com"
+  },
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
