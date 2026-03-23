@@ -5,7 +5,7 @@ import { WorkspacePicker } from './workspace/WorkspacePicker'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useStore, DEFAULT_WORKSPACE } from './store'
 import { FocusView } from './focus/FocusView'
-import { Terminal, Globe, Database, Compass, FolderOpen, Undo2, Redo2, Map, Search, Palette, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen, ChevronDown, Container } from 'lucide-react'
+import { Terminal, Globe, Database, Compass, FolderOpen, Undo2, Redo2, Map, Search, Palette, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen, ChevronDown, Container, LayoutGrid } from 'lucide-react'
 import { ShellPicker } from './tiles/ShellPicker'
 import { THEMES, THEME_ORDER, applyThemeCss, type ThemeName } from './lib/themes'
 import { initMcpBridge } from './lib/mcpBridge'
@@ -168,10 +168,11 @@ function AppInner() {
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
 function Toolbar() {
-  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, toggleDark, zoomIn, zoomOut, setViewMode } = useStore()
+  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, toggleDark, zoomIn, zoomOut, setViewMode, toggleAutoGrid } = useStore()
   const undoStack = useStore((s) => s.undoStack)
   const redoStack = useStore((s) => s.redoStack)
   const showMinimap = useStore((s) => s.showMinimap)
+  const autoGrid = useStore((s) => s.autoGrid)
   const theme = useStore((s) => s.theme)
   const zoom = useStore((s) => s.zoom)
   const viewMode = useStore((s) => s.viewMode)
@@ -251,6 +252,13 @@ function Toolbar() {
               title={`Toggle Minimap (${mod}M)`}
             >
               <Map size={ico} />
+            </button>
+            <button
+              className={`${btn} ${autoGrid ? 'text-green-400' : ''}`}
+              onClick={toggleAutoGrid}
+              title="Auto-Grid (tiles auto-arrange, no overlap)"
+            >
+              <LayoutGrid size={ico} />
             </button>
             <button className={btn} onClick={toggleSearch} title={`Search (${mod}F)`}>
               <Search size={ico} />

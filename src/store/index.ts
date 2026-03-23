@@ -102,6 +102,8 @@ export interface CanvasStore {
   showConfirmClear: boolean
   savedToast: boolean
   exitedTileIds: string[]
+  /** When true, tiles auto-arrange in grid after every move/resize/create */
+  autoGrid: boolean
 
   // ── Workspace ──────────────────────────────────────────────────────────────
   /** Named workspaces available (excludes __default__) */
@@ -163,6 +165,7 @@ export interface CanvasStore {
   setViewMode: (mode: ViewMode) => void
   toggleShortcuts: () => void
   toggleConfirmClear: () => void
+  toggleAutoGrid: () => void
   clearCanvas: () => void
   triggerSavedToast: () => void
 
@@ -184,6 +187,44 @@ export interface CanvasStore {
   consumeCurlData: (tileId: string) => { method: string; url: string; headers: { key: string; value: string }[]; body: string } | null
   /** Init store from persisted state (called once on app start). */
   initFromPersisted: () => Promise<void>
+}
+
+/** Auto-arrange all tiles in a grid layout without overlap */
+function runAutoGrid(get: () => CanvasStore, set: (fn: any) => void) {
+  const { tiles } = get()
+  if (tiles.length === 0) return
+  const gap = 24
+  const cols = Math.max(1, Math.ceil(Math.sqrt(tiles.length)))
+  const sorted = [...tiles].sort((a, b) => a.y - b.y || a.x - b.x)
+
+  // Compute column widths and row heights (use max in each col/row)
+  const colWidths: number[] = Array(cols).fill(0)
+  const rowCount = Math.ceil(sorted.length / cols)
+  const rowHeights: number[] = Array(rowCount).fill(0)
+
+  sorted.forEach((t, i) => {
+    const col = i % cols
+    const row = Math.floor(i / cols)
+    colWidths[col] = Math.max(colWidths[col], t.w)
+    rowHeights[row] = Math.max(rowHeights[row], t.h)
+  })
+
+  const startX = Math.min(...sorted.map((t) => t.x), 60)
+  const startY = Math.min(...sorted.map((t) => t.y), 60)
+
+  set((s: CanvasStore) => ({
+    tiles: s.tiles.map((t) => {
+      const idx = sorted.findIndex((st) => st.id === t.id)
+      if (idx === -1) return t
+      const col = idx % cols
+      const row = Math.floor(idx / cols)
+      let x = startX
+      for (let c = 0; c < col; c++) x += colWidths[c] + gap
+      let y = startY
+      for (let r = 0; r < row; r++) y += rowHeights[r] + gap
+      return { ...t, x: snapToGrid(x), y: snapToGrid(y) }
+    })
+  }))
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -211,6 +252,7 @@ export const useStore = create<CanvasStore>()(
     showConfirmClear: false,
     savedToast: false,
     exitedTileIds: [],
+    autoGrid: false,
     workspaces: [],
     activeWorkspace: null,
     tileCwds: {},
@@ -324,6 +366,8 @@ export const useStore = create<CanvasStore>()(
       }
       pushUndo(get, set, { type: 'create', snapshot: { ...tile } })
       set((s) => ({ tiles: [...s.tiles, tile], focusedId: tile.id }))
+      // Auto-grid after spawn
+      if (get().autoGrid) setTimeout(() => runAutoGrid(get, set), 50)
       return tile
     },
 
@@ -631,6 +675,8 @@ export const useStore = create<CanvasStore>()(
         }
       }
       set({ drag: null })
+      // Auto-grid after drag
+      if (get().autoGrid) runAutoGrid(get, set)
     },
 
     // ── UI ────────────────────────────────────────────────────────────────────
@@ -640,6 +686,11 @@ export const useStore = create<CanvasStore>()(
     setSearchQuery: (searchQuery) => set({ searchQuery }),
     toggleShortcuts: () => set((s) => ({ showShortcuts: !s.showShortcuts })),
     toggleConfirmClear: () => set((s) => ({ showConfirmClear: !s.showConfirmClear })),
+    toggleAutoGrid: () => {
+      const next = !get().autoGrid
+      set({ autoGrid: next })
+      if (next) runAutoGrid(get, set)
+    },
     clearCanvas: () => {
       const { tiles } = get()
       // Kill all PTYs
