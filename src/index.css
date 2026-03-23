@@ -32,21 +32,8 @@
   --animate-fade-in: fade-in 200ms ease forwards;
 }
 
-/* Light mode (default) */
+/* Default theme variables (dark) — overridden at runtime by applyThemeCss() */
 :root {
-  --canvas: #ebedf0;
-  --tile: #ffffff;
-  --titlebar: #f4f5f7;
-  --toolbar: #f4f5f7;
-  --surface: #f8f9fb;
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
-  --border: rgba(0, 0, 0, 0.15);
-}
-
-/* Dark mode */
-.dark {
   --canvas: #111213;
   --tile: #1B1D1F;
   --titlebar: #222426;

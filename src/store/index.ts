@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
 import { toast } from 'sonner'
 import type { Tile, TileKind, CanvasAction, DragState, Section, WorkspaceLayout, PersistedAppState, ViewMode } from '../types'
+import { THEMES, THEME_ORDER, type ThemeName } from '../lib/themes'
 const GRID_SNAP = 12 // half of GRID_SPACING (24)
 const TILE_MIN_W = 300
 const TILE_MIN_H = 180
@@ -89,8 +90,9 @@ export interface CanvasStore {
   undoStack: CanvasAction[]
   redoStack: CanvasAction[]
 
-  // Dark mode
+  // Theme
   isDark: boolean
+  theme: string
 
   // View mode
   viewMode: ViewMode
@@ -122,7 +124,7 @@ export interface CanvasStore {
   resetView: () => void
   fitAllTiles: () => void
 
-  spawnTile: (kind: TileKind, x?: number, y?: number, initialUrl?: string) => Tile
+  spawnTile: (kind: TileKind, x?: number, y?: number, initialUrl?: string, initialPath?: string) => Tile
   removeTile: (id: string) => void
   focusTile: (id: string | null) => void
   renameTile: (id: string, name: string) => void
@@ -157,6 +159,7 @@ export interface CanvasStore {
   redo: () => void
 
   toggleDark: () => void
+  setTheme: (theme: string) => void
   setViewMode: (mode: ViewMode) => void
   toggleShortcuts: () => void
   toggleConfirmClear: () => void
@@ -202,6 +205,7 @@ export const useStore = create<CanvasStore>()(
     undoStack: [],
     redoStack: [],
     isDark: true,
+    theme: 'dark',
     viewMode: 'canvas' as ViewMode,
     showShortcuts: false,
     showConfirmClear: false,
@@ -276,7 +280,7 @@ export const useStore = create<CanvasStore>()(
 
     // ── Tiles ─────────────────────────────────────────────────────────────────
 
-    spawnTile: (kind, x, y, initialUrl) => {
+    spawnTile: (kind, x, y, initialUrl, initialPath) => {
       const { tiles, panX, panY, zoom, viewMode } = get()
       const tileW = snapToGrid(640)
       const tileH = snapToGrid(396)
@@ -305,7 +309,7 @@ export const useStore = create<CanvasStore>()(
         w: tileW,
         h: tileH,
         name: (() => {
-          const base = kind === 'terminal' ? 'Terminal' : kind === 'http' ? 'HTTP' : kind === 'postgres' ? 'PostgreSQL' : 'Browser'
+          const base = kind === 'terminal' ? 'Terminal' : kind === 'http' ? 'HTTP' : kind === 'postgres' ? 'PostgreSQL' : kind === 'file' ? 'Files' : 'Browser'
           const count = tiles.filter((t) => t.kind === kind).length + 1
           return `${base} ${count}`
         })(),
@@ -313,7 +317,8 @@ export const useStore = create<CanvasStore>()(
         userRenamed: false,
         outputLink: null,
         zIndex: nextZIndex(tiles),
-        ...(initialUrl ? { initialUrl } : {})
+        ...(initialUrl ? { initialUrl } : {}),
+        ...(initialPath ? { initialPath } : {})
       }
       pushUndo(get, set, { type: 'create', snapshot: { ...tile } })
       set((s) => ({ tiles: [...s.tiles, tile], focusedId: tile.id }))
@@ -712,10 +717,27 @@ export const useStore = create<CanvasStore>()(
     // ── Theme ─────────────────────────────────────────────────────────────────
 
     toggleDark: () => {
-      const newDark = !get().isDark
-      set({ isDark: newDark })
+      // Cycle through themes in order
+      const current = get().theme as ThemeName
+      const idx = THEME_ORDER.indexOf(current)
+      const next = THEME_ORDER[(idx + 1) % THEME_ORDER.length]
+      const themeDef = THEMES[next]
+      set({ theme: next, isDark: themeDef.isDark })
       window.electronAPI.appStateSave({
-        isDark: newDark,
+        isDark: themeDef.isDark,
+        theme: next,
+        lastWorkspace: get().activeWorkspace
+      })
+    },
+
+    setTheme: (themeName) => {
+      const name = themeName as ThemeName
+      const themeDef = THEMES[name]
+      if (!themeDef) return
+      set({ theme: name, isDark: themeDef.isDark })
+      window.electronAPI.appStateSave({
+        isDark: themeDef.isDark,
+        theme: name,
         lastWorkspace: get().activeWorkspace
       })
     },
@@ -732,7 +754,7 @@ export const useStore = create<CanvasStore>()(
     // ── Workspaces ────────────────────────────────────────────────────────────
 
     saveWorkspace: async (name, explicit = false) => {
-      const { tiles, sections, zoom, panX, panY, activeWorkspace, isDark } = get()
+      const { tiles, sections, zoom, panX, panY, activeWorkspace, isDark, theme } = get()
       const workspaceName = name ?? activeWorkspace ?? DEFAULT_WORKSPACE
 
       // Collect CWDs for terminal tiles
@@ -756,9 +778,10 @@ export const useStore = create<CanvasStore>()(
 
       await window.electronAPI.workspaceSave(workspaceName, layout)
 
-      // Persist app state (dark mode + last workspace) — merged in main process
+      // Persist app state (theme + last workspace) — merged in main process
       const appState: Partial<PersistedAppState> = {
         isDark,
+        theme,
         lastWorkspace: workspaceName !== DEFAULT_WORKSPACE ? workspaceName : null
       }
       await window.electronAPI.appStateSave(appState)
@@ -845,7 +868,9 @@ export const useStore = create<CanvasStore>()(
     initFromPersisted: async () => {
       const appState = await window.electronAPI.appStateLoad()
       if (appState) {
-        set({ isDark: appState.isDark, viewMode: appState.viewMode ?? 'canvas' })
+        const themeName = (appState.theme ?? (appState.isDark ? 'dark' : 'light')) as ThemeName
+        const themeDef = THEMES[themeName] ?? THEMES.dark
+        set({ isDark: themeDef.isDark, theme: themeDef.name, viewMode: appState.viewMode ?? 'canvas' })
       }
 
       const all = await window.electronAPI.workspaceList()

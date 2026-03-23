@@ -105,5 +105,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('completion:path', tileId, partial),
 
   completeGit: (tileId: string, type: 'branch' | 'remote' | 'tag', partial: string) =>
-    ipcRenderer.invoke('completion:git', tileId, type, partial)
+    ipcRenderer.invoke('completion:git', tileId, type, partial),
+
+  // Filesystem operations
+  fsReadDir: (dirPath: string) =>
+    ipcRenderer.invoke('fs:readDir', dirPath),
+
+  fsReadFile: (filePath: string, maxBytes?: number) =>
+    ipcRenderer.invoke('fs:readFile', filePath, maxBytes),
+
+  fsGetHome: () =>
+    ipcRenderer.invoke('fs:getHome'),
+
+  fsPickFolder: () =>
+    ipcRenderer.invoke('fs:pickFolder')
 })

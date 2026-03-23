@@ -139,6 +139,12 @@ export function useKeyboard() {
             spawnTile('browser')
           }
           break
+        case 'e':
+          if (e.shiftKey) {
+            e.preventDefault()
+            spawnTile('file')
+          }
+          break
         case 'h':
           if (e.shiftKey) {
             e.preventDefault()
@@ -256,6 +262,7 @@ export function useKeyboard() {
     const cleanup = window.electronAPI.onMenuAction((action) => {
       switch (action) {
         case 'new-terminal': spawnTile('terminal'); break
+        case 'new-file-viewer': spawnTile('file'); break
         case 'new-canvas': useStore.getState().toggleConfirmClear(); break
         case 'close-tile': if (focusedId) removeTile(focusedId); break
         case 'save-workspace': saveWorkspace(undefined, true); break

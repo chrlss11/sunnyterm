@@ -4,7 +4,7 @@ import { TileContainer, TITLE_BAR_H } from '../tiles/TileContainer'
 import { SectionBox } from './SectionBox'
 import { Minimap } from '../minimap/Minimap'
 import { parseCurl } from '../lib/parseCurl'
-import { AlignStartVertical, AlignEndVertical, AlignStartHorizontal, AlignEndHorizontal, AlignCenterVertical, AlignCenterHorizontal, Rows3, Columns3, Terminal, Globe, Database, Compass } from 'lucide-react'
+import { AlignStartVertical, AlignEndVertical, AlignStartHorizontal, AlignEndHorizontal, AlignCenterVertical, AlignCenterHorizontal, Rows3, Columns3, Terminal, Globe, Database, Compass, FolderOpen } from 'lucide-react'
 import type { DragState, Tile } from '../types'
 
 const RESIZE_HANDLE = 32
@@ -535,7 +535,7 @@ function CreateMenu({ x, y, canvasX, canvasY, containerRef, onClose }: {
   const item = 'flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors'
   const ico = 13
 
-  const spawn = (kind: 'terminal' | 'http' | 'postgres' | 'browser') => {
+  const spawn = (kind: 'terminal' | 'http' | 'postgres' | 'browser' | 'file') => {
     spawnTile(kind, canvasX - 320, canvasY - 200)
     onClose()
   }
@@ -553,6 +553,7 @@ function CreateMenu({ x, y, canvasX, canvasY, containerRef, onClose }: {
       <div className={item} onClick={() => spawn('http')}><Globe size={ico} /> HTTP</div>
       <div className={item} onClick={() => spawn('postgres')}><Database size={ico} /> PostgreSQL</div>
       <div className={item} onClick={() => spawn('browser')}><Compass size={ico} /> Browser</div>
+      <div className={item} onClick={() => spawn('file')}><FolderOpen size={ico} /> File Viewer</div>
     </div>
   )
 }

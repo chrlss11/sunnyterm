@@ -1,6 +1,6 @@
 // ─── Tile kinds ───────────────────────────────────────────────────────────────
 
-export type TileKind = 'terminal' | 'http' | 'postgres' | 'browser'
+export type TileKind = 'terminal' | 'http' | 'postgres' | 'browser' | 'file'
 
 // ─── Section (Figma-style grouping) ──────────────────────────────────────────
 
@@ -27,6 +27,7 @@ export interface Tile {
   outputLink: string | null  // tile id this tile pipes output to
   zIndex: number
   initialUrl?: string  // for browser tiles: URL to load on first mount
+  initialPath?: string // for file tiles: directory to open
 }
 
 // Tile snapshot for undo/redo
@@ -85,6 +86,7 @@ export type ViewMode = 'canvas' | 'focus'
 
 export interface PersistedAppState {
   isDark: boolean
+  theme?: string
   lastWorkspace: string | null
   viewMode?: ViewMode
   windowBounds?: { x: number; y: number; width: number; height: number }
@@ -143,6 +145,12 @@ export interface ElectronAPI {
   // Completions
   completePath: (tileId: string, partial: string) => Promise<CompletionItemResult[]>
   completeGit: (tileId: string, type: 'branch' | 'remote' | 'tag', partial: string) => Promise<CompletionItemResult[]>
+
+  // Filesystem
+  fsReadDir: (dirPath: string) => Promise<FsEntry[]>
+  fsReadFile: (filePath: string, maxBytes?: number) => Promise<FsFileResult>
+  fsGetHome: () => Promise<string>
+  fsPickFolder: () => Promise<string | null>
 }
 
 // ─── Completion types ────────────────────────────────────────────────────────
@@ -151,6 +159,25 @@ export interface CompletionItemResult {
   value: string
   label: string
   kind: 'file' | 'directory' | 'branch' | 'remote' | 'tag'
+}
+
+// ─── Filesystem types ────────────────────────────────────────────────────────
+
+export interface FsEntry {
+  name: string
+  path: string
+  isDirectory: boolean
+  isSymlink: boolean
+  size: number
+  modifiedMs: number
+}
+
+export interface FsFileResult {
+  ok: boolean
+  content?: string
+  size?: number
+  isBinary?: boolean
+  error?: string
 }
 
 // ─── HTTP types ───────────────────────────────────────────────────────────────

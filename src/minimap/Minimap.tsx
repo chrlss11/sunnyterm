@@ -10,6 +10,7 @@ const TILE_ICONS: Record<string, string> = {
   terminal: 'M4 17l6-5-6-5M12 19h8', // terminal prompt >_
   http: 'M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15 15 0 014 10 15 15 0 01-4 10M12 2a15 15 0 00-4 10 15 15 0 004 10', // globe
   postgres: 'M4 7v10c0 2 4 4 8 4s8-2 8-4V7M4 7c0 2 4 4 8 4s8-2 8-4M4 7c0-2 4-4 8-4s8 2 8 4M4 12c0 2 4 4 8 4s8-2 8-4', // database
+  file: 'M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9l-7-7zM13 2v7h7', // file
 }
 
 export function Minimap() {

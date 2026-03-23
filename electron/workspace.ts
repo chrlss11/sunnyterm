@@ -31,6 +31,7 @@ export interface WorkspaceLayout {
 
 export interface PersistedAppState {
   isDark: boolean
+  theme?: string
   lastWorkspace: string | null
   windowBounds?: { x: number; y: number; width: number; height: number }
 }

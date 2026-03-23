@@ -5,7 +5,8 @@ import { WorkspacePicker } from './workspace/WorkspacePicker'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useStore, DEFAULT_WORKSPACE } from './store'
 import { FocusView } from './focus/FocusView'
-import { Terminal, Globe, Database, Compass, Undo2, Redo2, Map, Search, Sun, Moon, ZoomIn, ZoomOut, FolderOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Terminal, Globe, Database, Compass, FolderOpen, Undo2, Redo2, Map, Search, Palette, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen, ChevronDown } from 'lucide-react'
+import { THEMES, THEME_ORDER, applyThemeCss, type ThemeName } from './lib/themes'
 import type { ViewMode } from './types'
 import { Toaster } from 'sonner'
 
@@ -21,6 +22,7 @@ export function App() {
 function AppInner() {
   useKeyboard()
   const isDark = useStore((s) => s.isDark)
+  const theme = useStore((s) => s.theme)
   const showShortcuts = useStore((s) => s.showShortcuts)
   const showConfirmClear = useStore((s) => s.showConfirmClear)
   const focusedId = useStore((s) => s.focusedId)
@@ -29,10 +31,11 @@ function AppInner() {
   const { initFromPersisted, toggleShortcuts, toggleConfirmClear, clearCanvas } = useStore()
   const initializedRef = useRef(false)
 
-  // ── Sync dark class on <html> so CSS variables cascade from root ──────────
+  // ── Apply theme CSS variables on theme change ─────────────────────────────
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark)
-  }, [isDark])
+    const themeDef = THEMES[theme as ThemeName] ?? THEMES.dark
+    applyThemeCss(themeDef)
+  }, [theme])
 
   // ── Init from persisted state on first mount ───────────────────────────────
   useEffect(() => {
@@ -130,7 +133,7 @@ function Toolbar() {
   const undoStack = useStore((s) => s.undoStack)
   const redoStack = useStore((s) => s.redoStack)
   const showMinimap = useStore((s) => s.showMinimap)
-  const isDark = useStore((s) => s.isDark)
+  const theme = useStore((s) => s.theme)
   const zoom = useStore((s) => s.zoom)
   const viewMode = useStore((s) => s.viewMode)
   const [expanded, setExpanded] = React.useState(false)
@@ -173,6 +176,9 @@ function Toolbar() {
             <button className={btn} onClick={() => spawnTile('browser')} title="New Browser (⌘⇧B)">
               <Compass size={ico} />
             </button>
+            <button className={btn} onClick={() => spawnTile('file')} title="New File Viewer (⌘⇧E)">
+              <FolderOpen size={ico} />
+            </button>
 
             <div className={sep} />
 
@@ -214,13 +220,7 @@ function Toolbar() {
 
             <div className={sep} />
 
-            <button
-              className={btn}
-              onClick={toggleDark}
-              title={isDark ? 'Light mode (⌘⇧D)' : 'Dark mode (⌘⇧D)'}
-            >
-              {isDark ? <Sun size={ico} /> : <Moon size={ico} />}
-            </button>
+            <ThemePicker />
 
             <div className={sep} />
 
@@ -320,6 +320,77 @@ function ConfirmClearModal({ tileCount, onConfirm, onCancel }: { tileCount: numb
   )
 }
 
+// ── Theme picker ──────────────────────────────────────────────────────────
+
+const THEME_COLORS: Record<ThemeName, string> = {
+  dark: '#1B1D1F',
+  light: '#ffffff',
+  claude: '#e8a44a',
+  vino: '#c45a7c'
+}
+
+function ThemePicker() {
+  const theme = useStore((s) => s.theme)
+  const { setTheme } = useStore()
+  const [open, setOpen] = React.useState(false)
+  const ref = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const current = THEMES[theme as ThemeName] ?? THEMES.dark
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        className="p-1.5 px-2 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/8 transition-colors flex items-center gap-1.5"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span
+          className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/20"
+          style={{ background: THEME_COLORS[current.name] }}
+        />
+        <span>{current.label}</span>
+        <ChevronDown size={10} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute top-full left-0 mt-1 w-36 rounded-lg border border-border bg-tile shadow-xl py-1 z-50"
+        >
+          {THEME_ORDER.map((name) => {
+            const t = THEMES[name]
+            const isActive = name === current.name
+            return (
+              <div
+                key={name}
+                className={`flex items-center gap-2.5 px-3 py-1.5 text-xs cursor-pointer transition-colors ${
+                  isActive
+                    ? 'text-text-primary bg-black/5 dark:bg-white/10'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/8'
+                }`}
+                onClick={() => { setTheme(name); setOpen(false) }}
+              >
+                <span
+                  className="w-3 h-3 rounded-full shrink-0 border border-white/20"
+                  style={{ background: THEME_COLORS[name] }}
+                />
+                {t.label}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Shortcuts modal ───────────────────────────────────────────────────────────
 
 const SHORTCUTS: { key: string; desc: string }[] = [
@@ -328,6 +399,7 @@ const SHORTCUTS: { key: string; desc: string }[] = [
   { key: '⌘⇧N', desc: 'New Canvas' },
   { key: '⌘⇧P', desc: 'New PostgreSQL pane' },
   { key: '⌘⇧B', desc: 'New Browser pane' },
+  { key: '⌘⇧E', desc: 'New File Viewer' },
   { key: '⌘W', desc: 'Close focused tile' },
   { key: '⌘Z', desc: 'Undo' },
   { key: '⌘⇧Z', desc: 'Redo' },
@@ -336,7 +408,7 @@ const SHORTCUTS: { key: string; desc: string }[] = [
   { key: '⌘L', desc: 'Start output linking' },
   { key: '⌘S', desc: 'Save workspace' },
   { key: '⌘0', desc: 'Reset zoom to 100%' },
-  { key: '⌘⇧D', desc: 'Toggle dark / light mode' },
+  { key: '⌘⇧D', desc: 'Cycle theme' },
   { key: '⌘1–9', desc: 'Switch workspace by index' },
   { key: '⌘+/−', desc: 'Zoom in / out' },
   { key: 'Tab', desc: 'Focus next tile' },

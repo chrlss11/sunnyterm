@@ -14,56 +14,7 @@ import { InputInterceptor } from '../lib/inputInterceptor'
 import { GhostTextRenderer } from '../lib/ghostTextRenderer'
 import { initHistory, addCommand, findMatch } from '../lib/commandHistory'
 import { CompletionDropdown, type CompletionItem } from './CompletionDropdown'
-
-// ── Terminal themes ────────────────────────────────────────────────────────────
-
-const darkTheme = {
-  background: '#1B1D1F',
-  foreground: '#e0e0e0',
-  cursor: '#a0a0ff',
-  cursorAccent: '#1B1D1F',
-  selectionBackground: '#4040a0',
-  black: '#222426',
-  red: '#ff5555',
-  green: '#50fa7b',
-  yellow: '#f1fa8c',
-  blue: '#bd93f9',
-  magenta: '#ff79c6',
-  cyan: '#8be9fd',
-  white: '#f8f8f2',
-  brightBlack: '#6272a4',
-  brightRed: '#ff6e6e',
-  brightGreen: '#69ff94',
-  brightYellow: '#ffffa5',
-  brightBlue: '#d6acff',
-  brightMagenta: '#ff92df',
-  brightCyan: '#a4ffff',
-  brightWhite: '#ffffff'
-}
-
-const lightTheme = {
-  background: '#ffffff',
-  foreground: '#24292e',
-  cursor: '#586069',
-  cursorAccent: '#ffffff',
-  selectionBackground: '#c8d3e8',
-  black: '#24292e',
-  red: '#d73a49',
-  green: '#22863a',
-  yellow: '#b08800',
-  blue: '#0366d6',
-  magenta: '#6f42c1',
-  cyan: '#1b7c83',
-  white: '#6a737d',
-  brightBlack: '#959da5',
-  brightRed: '#cb2431',
-  brightGreen: '#28a745',
-  brightYellow: '#dbab09',
-  brightBlue: '#2188ff',
-  brightMagenta: '#8a63d2',
-  brightCyan: '#3192aa',
-  brightWhite: '#d1d5da'
-}
+import { THEMES, type ThemeName } from '../lib/themes'
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -78,8 +29,8 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
-  // Track current isDark for terminal init effect (avoids re-running on theme change)
-  const isDarkRef = useRef(true)
+  // Track current theme for terminal init effect (avoids re-running on theme change)
+  const themeRef = useRef('dark')
 
   const [exitInfo, setExitInfo] = useState<{ code: number } | null>(null)
   // incrementing this forces terminal + PTY to fully reinitialise
@@ -92,9 +43,10 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
 
   const tiles = useStore((s) => s.tiles)
   const isDark = useStore((s) => s.isDark)
+  const theme = useStore((s) => s.theme)
   const zoom = useStore((s) => s.zoom)
   const focusedId = useStore((s) => s.focusedId)
-  isDarkRef.current = isDark
+  themeRef.current = theme
 
   const tile = tiles.find((t) => t.id === tileId)
 
@@ -166,8 +118,9 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     xtermElement.style.boxSizing = 'border-box'
     containerRef.current.appendChild(xtermElement)
 
+    const currentTheme = THEMES[themeRef.current as ThemeName] ?? THEMES.dark
     const term = new Terminal({
-      theme: isDarkRef.current ? darkTheme : lightTheme,
+      theme: currentTheme.terminal,
       fontFamily: '"Google Sans Mono", Menlo, Monaco, monospace',
       fontSize: 13,
       lineHeight: 1.0,
@@ -221,7 +174,7 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     markTileAlive(tileId)
 
     // ── Ghost text renderer ──────────────────────────────────────────────
-    const ghostRenderer = new GhostTextRenderer(term, () => isDarkRef.current)
+    const ghostRenderer = new GhostTextRenderer(term, () => (THEMES[themeRef.current as ThemeName] ?? THEMES.dark).isDark)
 
     // ── Completion helper ─────────────────────────────────────────────────
     const requestCompletions = async (buffer: string) => {
@@ -392,21 +345,21 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     if (entry) entry.outputLink = tile?.outputLink ?? null
   }, [tile?.outputLink, tileId])
 
-  // ── Sync terminal theme when dark mode changes ────────────────────────────
+  // ── Sync terminal theme when theme changes ──────────────────────────────
 
   useEffect(() => {
     const term = termRef.current
     if (!term) return
-    const theme = isDark ? darkTheme : lightTheme
-    term.options.theme = theme
+    const themeDef = THEMES[theme as ThemeName] ?? THEMES.dark
+    term.options.theme = themeDef.terminal
     // Force xterm to repaint with new theme colors
     term.refresh(0, term.rows - 1)
     // Update the container background to match
     if (containerRef.current) {
       const viewport = containerRef.current.querySelector('.xterm-viewport') as HTMLElement
-      if (viewport) viewport.style.backgroundColor = theme.background
+      if (viewport) viewport.style.backgroundColor = themeDef.terminal.background
     }
-  }, [isDark])
+  }, [theme])
 
   // ── Fit terminal to tile dimensions ──────────────────────────────────────
   // Uses tile.w/tile.h directly instead of DOM measurements to avoid

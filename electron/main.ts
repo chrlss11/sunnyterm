@@ -7,6 +7,7 @@ import type { WorkspaceLayout, PersistedAppState } from './workspace'
 import { Client as PgClient } from 'pg'
 import { HistoryManager } from './history'
 import { completePath, completeGit } from './completions'
+import { readDirectory, readFileContent, getHomeDir } from './filesystem'
 
 let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager()
@@ -47,6 +48,10 @@ function createMenu(): void {
         {
           label: 'New Canvas',
           click: () => sendMenuAction('new-canvas')
+        },
+        {
+          label: 'New File Viewer\t⌘⇧E',
+          click: () => sendMenuAction('new-file-viewer')
         },
         {
           label: 'Close Tile\t⌘W',
@@ -116,7 +121,11 @@ function createWindow(): void {
   const appState = workspaceManager.getAppState()
   const bounds = appState.windowBounds
 
-  const isDark = appState.isDark !== false
+  // Determine background color from theme
+  const bgColors: Record<string, string> = {
+    dark: '#111213', light: '#ebedf0', claude: '#1a1510', vino: '#170d14'
+  }
+  const bgColor = bgColors[appState.theme ?? 'dark'] ?? '#111213'
   mainWindow = new BrowserWindow({
     width: bounds?.width ?? 1400,
     height: bounds?.height ?? 900,
@@ -124,7 +133,7 @@ function createWindow(): void {
     y: bounds?.y,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: isDark ? '#111213' : '#ebedf0',
+    backgroundColor: bgColor,
     icon: join(__dirname, '../../resources/icon.icns'),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 14, y: 14 },
@@ -355,6 +364,30 @@ ipcMain.handle('completion:path', async (_event, tileId: string, partial: string
 ipcMain.handle('completion:git', async (_event, tileId: string, type: 'branch' | 'remote' | 'tag', partial: string) => {
   const cwd = ptyManager.getCwd(tileId) || process.env.HOME || '/'
   return completeGit(cwd, type, partial)
+})
+
+// ─── Filesystem IPC handlers ─────────────────────────────────────────────────
+
+ipcMain.handle('fs:readDir', async (_event, dirPath: string) => {
+  return readDirectory(dirPath)
+})
+
+ipcMain.handle('fs:readFile', async (_event, filePath: string, maxBytes?: number) => {
+  return readFileContent(filePath, maxBytes)
+})
+
+ipcMain.handle('fs:getHome', () => {
+  return getHomeDir()
+})
+
+ipcMain.handle('fs:pickFolder', async () => {
+  if (!mainWindow) return null
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select Folder'
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+  return result.filePaths[0]
 })
 
 // ─── App lifecycle ─────────────────────────────────────────────────────────────
