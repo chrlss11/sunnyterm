@@ -1,5 +1,6 @@
 import React, { useCallback, useRef } from 'react'
 import { useStore } from '../store'
+import { useResonance } from '../lib/resonance'
 
 const MINIMAP_W = 160
 const MINIMAP_H = 110
@@ -11,6 +12,9 @@ const TILE_ICONS: Record<string, string> = {
   http: 'M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15 15 0 014 10 15 15 0 01-4 10M12 2a15 15 0 00-4 10 15 15 0 004 10', // globe
   postgres: 'M4 7v10c0 2 4 4 8 4s8-2 8-4V7M4 7c0 2 4 4 8 4s8-2 8-4M4 7c0-2 4-4 8-4s8 2 8 4M4 12c0 2 4 4 8 4s8-2 8-4', // database
   file: 'M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9l-7-7zM13 2v7h7', // file
+  lens: 'M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35', // search/lens
+  docker: 'M2 11h4v4H2zM8 11h4v4H8zM14 11h4v4h-4zM8 6h4v4H8zM14 6h4v4h-4z', // container stacks
+  chart: 'M5 20V10M12 20V4M19 20V14', // bar chart
 }
 
 export function Minimap() {
@@ -21,6 +25,7 @@ export function Minimap() {
   const focusedId = useStore((s) => s.focusedId)
   const isDark = useStore((s) => s.isDark)
   const { setPan } = useStore()
+  const resonanceMatches = useResonance((s) => s.matches)
 
   const svgRef = useRef<SVGSVGElement>(null)
   const isDragging = useRef(false)
@@ -110,6 +115,7 @@ export function Minimap() {
           const w = Math.max(4, t.w * scale)
           const h = Math.max(4, t.h * scale)
           const isFocused = t.id === focusedId
+          const resonance = resonanceMatches.find((m) => m.tileId === t.id)
           const iconPath = TILE_ICONS[t.kind] ?? TILE_ICONS.terminal
           const iconSize = Math.min(w, h) * 0.5
           const showIcon = iconSize >= 5
@@ -130,6 +136,20 @@ export function Minimap() {
                   : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)')}
                 strokeWidth={0.5}
               />
+              {/* Resonance glow */}
+              {resonance && (
+                <rect
+                  x={pos.x - 1}
+                  y={pos.y - 1}
+                  width={w + 2}
+                  height={h + 2}
+                  rx={3}
+                  fill="none"
+                  stroke="#f9e2af"
+                  strokeWidth={1.5}
+                  opacity={0.8}
+                />
+              )}
               {showIcon && (
                 <g transform={`translate(${pos.x + w / 2 - iconSize / 2}, ${pos.y + h / 2 - iconSize / 2}) scale(${iconSize / 24})`}>
                   <path

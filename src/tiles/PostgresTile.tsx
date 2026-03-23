@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import type { PgQueryResult } from '../types'
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -45,6 +45,13 @@ export function PostgresTile({ tileId }: { tileId: string }) {
   const [running, setRunning] = useState(false)
   const sqlRef = useRef<HTMLTextAreaElement>(null)
   const connInputRef = useRef<HTMLInputElement>(null)
+  const [platform, setPlatform] = useState<string>('darwin')
+
+  useEffect(() => {
+    window.electronAPI.getPlatform().then(setPlatform)
+  }, [])
+
+  const runMod = platform === 'darwin' ? '⌘' : 'Ctrl'
 
   // ── Connect ──────────────────────────────────────────────────────────────────
   const connect = useCallback(async () => {
@@ -176,7 +183,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
               }`}
               onClick={runQuery}
               disabled={status !== 'connected' || running}
-              title="Run query (⌘+Enter)"
+              title={`Run query (${runMod}+Enter)`}
             >
               {running ? (
                 <span className="flex items-center gap-1">
@@ -190,7 +197,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
         <textarea
           ref={sqlRef}
           className="flex-1 min-h-0 bg-transparent text-text-primary text-xs p-2 outline-none resize-none"
-          placeholder={status === 'connected' ? 'SELECT * FROM table; (⌘+Enter to run)' : 'Connect to a database first'}
+          placeholder={status === 'connected' ? `SELECT * FROM table; (${runMod}+Enter to run)` : 'Connect to a database first'}
           value={sql}
           onChange={(e) => setSql(e.target.value)}
           onKeyDown={handleSqlKeyDown}

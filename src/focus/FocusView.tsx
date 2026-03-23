@@ -5,6 +5,9 @@ import { HttpTile } from '../tiles/HttpTile'
 import { PostgresTile } from '../tiles/PostgresTile'
 import { BrowserTile } from '../tiles/BrowserTile'
 import { FileViewerTile } from '../tiles/FileViewerTile'
+import { LensTile } from '../tiles/LensTile'
+import { DockerTile } from '../tiles/DockerTile'
+import { ChartTile } from '../tiles/ChartTile'
 import { MoreHorizontal, Pencil, Copy, RotateCcw, ClipboardCopy, Link, X } from 'lucide-react'
 import { TileKindIcon } from '../tiles/TileKindIcon'
 import type { Tile, TileKind } from '../types'
@@ -227,6 +230,9 @@ export function FocusView() {
                 { kind: 'postgres' as TileKind, label: 'PostgreSQL' },
                 { kind: 'browser' as TileKind, label: 'Browser' },
                 { kind: 'file' as TileKind, label: 'File Viewer' },
+                { kind: 'lens' as TileKind, label: 'Lens (Filter)' },
+                { kind: 'docker' as TileKind, label: 'Docker' },
+                { kind: 'chart' as TileKind, label: 'Chart' },
               ]).map(({ kind, label }) => (
                 <div
                   key={kind}
@@ -488,6 +494,9 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
           {tile.kind === 'postgres' && <PostgresTile tileId={tile.id} />}
           {tile.kind === 'browser' && <BrowserTile tileId={tile.id} />}
           {tile.kind === 'file' && <FileViewerTile tileId={tile.id} />}
+          {tile.kind === 'lens' && <LensTile tileId={tile.id} overrideW={cardW} overrideH={contentH} />}
+          {tile.kind === 'docker' && <DockerTile tileId={tile.id} />}
+          {tile.kind === 'chart' && <ChartTile tileId={tile.id} />}
         </div>
       </div>
     </div>

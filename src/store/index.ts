@@ -124,7 +124,7 @@ export interface CanvasStore {
   resetView: () => void
   fitAllTiles: () => void
 
-  spawnTile: (kind: TileKind, x?: number, y?: number, initialUrl?: string, initialPath?: string) => Tile
+  spawnTile: (kind: TileKind, x?: number, y?: number, initialUrl?: string, initialPath?: string, shell?: string, chartData?: string) => Tile
   removeTile: (id: string) => void
   focusTile: (id: string | null) => void
   renameTile: (id: string, name: string) => void
@@ -280,7 +280,7 @@ export const useStore = create<CanvasStore>()(
 
     // ── Tiles ─────────────────────────────────────────────────────────────────
 
-    spawnTile: (kind, x, y, initialUrl, initialPath) => {
+    spawnTile: (kind, x, y, initialUrl, initialPath, shell, chartData) => {
       const { tiles, panX, panY, zoom, viewMode } = get()
       const tileW = snapToGrid(640)
       const tileH = snapToGrid(396)
@@ -309,7 +309,7 @@ export const useStore = create<CanvasStore>()(
         w: tileW,
         h: tileH,
         name: (() => {
-          const base = kind === 'terminal' ? 'Terminal' : kind === 'http' ? 'HTTP' : kind === 'postgres' ? 'PostgreSQL' : kind === 'file' ? 'Files' : 'Browser'
+          const base = kind === 'terminal' ? 'Terminal' : kind === 'http' ? 'HTTP' : kind === 'postgres' ? 'PostgreSQL' : kind === 'file' ? 'Files' : kind === 'lens' ? 'Lens' : kind === 'chart' ? 'Chart' : kind === 'docker' ? 'Docker' : 'Browser'
           const count = tiles.filter((t) => t.kind === kind).length + 1
           return `${base} ${count}`
         })(),
@@ -318,7 +318,9 @@ export const useStore = create<CanvasStore>()(
         outputLink: null,
         zIndex: nextZIndex(tiles),
         ...(initialUrl ? { initialUrl } : {}),
-        ...(initialPath ? { initialPath } : {})
+        ...(initialPath ? { initialPath } : {}),
+        ...(shell ? { shell } : {}),
+        ...(chartData ? { chartData } : {})
       }
       pushUndo(get, set, { type: 'create', snapshot: { ...tile } })
       set((s) => ({ tiles: [...s.tiles, tile], focusedId: tile.id }))

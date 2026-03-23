@@ -34,6 +34,8 @@ export interface PersistedAppState {
   theme?: string
   lastWorkspace: string | null
   windowBounds?: { x: number; y: number; width: number; height: number }
+  /** Default shell path (empty = system default) */
+  defaultShell?: string
 }
 
 // ─── Storage paths ─────────────────────────────────────────────────────────────

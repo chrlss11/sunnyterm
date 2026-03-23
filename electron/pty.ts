@@ -8,6 +8,8 @@ interface PtyEntry {
 
 export class PtyManager {
   private ptys = new Map<string, PtyEntry>()
+  /** User-configured default shell (set from settings) */
+  configuredDefault: string = ''
 
   spawn(
     id: string,
@@ -100,11 +102,18 @@ export class PtyManager {
       if (process.platform === 'linux') {
         return execSync(`readlink /proc/${entry.pid}/cwd`).toString().trim()
       }
+      if (process.platform === 'win32') {
+        // Use PowerShell to get the working directory of the child process
+        const cmd = `powershell -NoProfile -Command "(Get-Process -Id ${entry.pid} -ErrorAction SilentlyContinue).Path | Split-Path -Parent"`
+        const result = execSync(cmd, { timeout: 3000 }).toString().trim()
+        if (result) return result
+      }
     } catch {}
     return null
   }
 
   private defaultShell(): string {
+    if (this.configuredDefault) return this.configuredDefault
     return process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/bash')
   }
 }

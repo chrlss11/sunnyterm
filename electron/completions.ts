@@ -13,7 +13,7 @@ export interface CompletionItem {
 export async function completePath(cwd: string, partial: string): Promise<CompletionItem[]> {
   try {
     // Resolve the partial path relative to cwd
-    const resolved = partial.startsWith('/')
+    const resolved = path.isAbsolute(partial)
       ? partial
       : path.join(cwd, partial)
 
@@ -21,8 +21,8 @@ export async function completePath(cwd: string, partial: string): Promise<Comple
     let dir: string
     let prefix: string
 
-    // Check if partial ends with / — list directory contents
-    if (partial.endsWith('/')) {
+    // Check if partial ends with a path separator — list directory contents
+    if (partial.endsWith('/') || partial.endsWith(path.sep)) {
       dir = resolved
       prefix = ''
     } else {

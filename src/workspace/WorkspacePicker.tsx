@@ -6,6 +6,13 @@ export function WorkspacePicker() {
   const workspaces = useStore((s) => s.workspaces)
   const activeWorkspace = useStore((s) => s.activeWorkspace)
   const { saveWorkspace, loadWorkspace, deleteWorkspace } = useStore()
+  const [platform, setPlatform] = useState<string>('darwin')
+
+  useEffect(() => {
+    window.electronAPI.getPlatform().then(setPlatform)
+  }, [])
+
+  const mod = platform === 'darwin' ? '⌘' : 'Ctrl+'
 
   const [isOpen, setIsOpen] = useState(false)
   const [saveInput, setSaveInput] = useState('')
@@ -109,7 +116,7 @@ export function WorkspacePicker() {
               >
                 {/* Cmd+1-9 hint */}
                 <span className="text-text-muted text-[10px] w-6 shrink-0">
-                  {i < 9 ? `⌘${i + 1}` : ''}
+                  {i < 9 ? `${mod}${i + 1}` : ''}
                 </span>
                 <span className="flex-1 text-xs truncate">{name}</span>
                 <button
@@ -125,7 +132,7 @@ export function WorkspacePicker() {
 
           {/* Quick save hint */}
           <div className="px-3 pt-1 pb-1 border-t border-border text-[10px] text-text-muted">
-            ⌘S to save · ⌘1-9 to switch
+            {mod}S to save · {mod}1-9 to switch
           </div>
         </div>
       )}

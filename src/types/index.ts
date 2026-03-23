@@ -1,6 +1,6 @@
 // ─── Tile kinds ───────────────────────────────────────────────────────────────
 
-export type TileKind = 'terminal' | 'http' | 'postgres' | 'browser' | 'file'
+export type TileKind = 'terminal' | 'http' | 'postgres' | 'browser' | 'file' | 'lens' | 'chart' | 'docker'
 
 // ─── Section (Figma-style grouping) ──────────────────────────────────────────
 
@@ -28,6 +28,8 @@ export interface Tile {
   zIndex: number
   initialUrl?: string  // for browser tiles: URL to load on first mount
   initialPath?: string // for file tiles: directory to open
+  shell?: string       // for terminal tiles: specific shell path override
+  chartData?: string   // for chart tiles: raw data string to parse and visualize
 }
 
 // Tile snapshot for undo/redo
@@ -90,6 +92,7 @@ export interface PersistedAppState {
   lastWorkspace: string | null
   viewMode?: ViewMode
   windowBounds?: { x: number; y: number; width: number; height: number }
+  defaultShell?: string
 }
 
 // ─── ElectronAPI (window.electronAPI injected by preload) ─────────────────────
@@ -151,6 +154,31 @@ export interface ElectronAPI {
   fsReadFile: (filePath: string, maxBytes?: number) => Promise<FsFileResult>
   fsGetHome: () => Promise<string>
   fsPickFolder: () => Promise<string | null>
+
+  // Shell management
+  shellsList: () => Promise<ShellInfo[]>
+  shellsGetDefault: () => Promise<string>
+  shellsSetDefault: (shellPath: string) => Promise<void>
+
+  // Platform info
+  getPlatform: () => Promise<string>
+
+  // Docker
+  dockerList: () => Promise<{ ok: boolean; containers?: any[]; error?: string }>
+  dockerLogs: (containerId: string) => Promise<{ ok: boolean; logs?: string; error?: string }>
+
+  // MCP Bridge
+  onMcpMessage: (channel: string, callback: (...args: any[]) => void) => () => void
+  mcpRespond: (channel: string, data: unknown) => void
+}
+
+// ─── Shell types ─────────────────────────────────────────────────────────────
+
+export interface ShellInfo {
+  id: string
+  name: string
+  path: string
+  icon: string
 }
 
 // ─── Completion types ────────────────────────────────────────────────────────

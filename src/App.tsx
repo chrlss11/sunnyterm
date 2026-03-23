@@ -5,8 +5,11 @@ import { WorkspacePicker } from './workspace/WorkspacePicker'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useStore, DEFAULT_WORKSPACE } from './store'
 import { FocusView } from './focus/FocusView'
-import { Terminal, Globe, Database, Compass, FolderOpen, Undo2, Redo2, Map, Search, Palette, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen, ChevronDown } from 'lucide-react'
+import { Terminal, Globe, Database, Compass, FolderOpen, Undo2, Redo2, Map, Search, Palette, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen, ChevronDown, Container } from 'lucide-react'
+import { ShellPicker } from './tiles/ShellPicker'
 import { THEMES, THEME_ORDER, applyThemeCss, type ThemeName } from './lib/themes'
+import { initMcpBridge } from './lib/mcpBridge'
+import { useResonance } from './lib/resonance'
 import type { ViewMode } from './types'
 import { Toaster } from 'sonner'
 
@@ -64,6 +67,7 @@ function AppInner() {
     if (initializedRef.current) return
     initializedRef.current = true
     initFromPersisted()
+    initMcpBridge() // Start MCP bridge for Claude Code integration
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Debounced auto-save on meaningful canvas changes ──────────────────────
@@ -131,6 +135,9 @@ function AppInner() {
         )}
       </div>
 
+      {/* Resonance bar */}
+      <ResonanceBar />
+
       <Toaster
         position="bottom-right"
         theme={isDark ? 'dark' : 'light'}
@@ -165,6 +172,14 @@ function Toolbar() {
   const zoom = useStore((s) => s.zoom)
   const viewMode = useStore((s) => s.viewMode)
   const [expanded, setExpanded] = React.useState(false)
+  const [platform, setPlatform] = React.useState<string>('darwin')
+
+  React.useEffect(() => {
+    window.electronAPI.getPlatform().then(setPlatform)
+  }, [])
+
+  const isMac = platform === 'darwin'
+  const mod = isMac ? '⌘' : 'Ctrl+'
 
   const ico = 14
   const btn = 'p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/8 transition-colors flex items-center gap-1.5'
@@ -176,8 +191,8 @@ function Toolbar() {
       className="flex items-center gap-0.5 px-3 shrink-0"
       style={{ height: 44, WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      {/* macOS traffic light spacer */}
-      <div style={{ width: 72 }} />
+      {/* macOS traffic light spacer — only needed on macOS */}
+      {isMac && <div style={{ width: 72 }} />}
 
       <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         <button
@@ -192,28 +207,35 @@ function Toolbar() {
           <>
             <div className={sep} />
 
-            <button className={btn} onClick={() => spawnTile('terminal')} title="New Terminal (⌘T)">
+            <button className={btn} onClick={() => spawnTile('terminal')} title={`New Terminal (${mod}T)`}>
               <Terminal size={ico} />
             </button>
-            <button className={btn} onClick={() => spawnTile('http')} title="New HTTP Client (⌘⇧H)">
+            <ShellPicker />
+            <button className={btn} onClick={() => spawnTile('http')} title={`New HTTP Client (${mod}⇧H)`}>
               <Globe size={ico} />
             </button>
-            <button className={btn} onClick={() => spawnTile('postgres')} title="New PostgreSQL Client (⌘⇧P)">
+            <button className={btn} onClick={() => spawnTile('postgres')} title={`New PostgreSQL Client (${mod}⇧P)`}>
               <Database size={ico} />
             </button>
-            <button className={btn} onClick={() => spawnTile('browser')} title="New Browser (⌘⇧B)">
+            <button className={btn} onClick={() => spawnTile('browser')} title={`New Browser (${mod}⇧B)`}>
               <Compass size={ico} />
             </button>
-            <button className={btn} onClick={() => spawnTile('file')} title="New File Viewer (⌘⇧E)">
+            <button className={btn} onClick={() => spawnTile('file')} title={`New File Viewer (${mod}⇧E)`}>
               <FolderOpen size={ico} />
+            </button>
+            <button className={btn} onClick={() => spawnTile('lens')} title="New Lens (filtered view)">
+              <Search size={ico} />
+            </button>
+            <button className={btn} onClick={() => spawnTile('docker')} title="New Docker Topology">
+              <Container size={ico} />
             </button>
 
             <div className={sep} />
 
-            <button className={btn} onClick={undo} disabled={undoStack.length === 0} title="Undo (⌘Z)">
+            <button className={btn} onClick={undo} disabled={undoStack.length === 0} title={`Undo (${mod}Z)`}>
               <Undo2 size={ico} />
             </button>
-            <button className={btn} onClick={redo} disabled={redoStack.length === 0} title="Redo (⌘⇧Z)">
+            <button className={btn} onClick={redo} disabled={redoStack.length === 0} title={`Redo (${mod}⇧Z)`}>
               <Redo2 size={ico} />
             </button>
 
@@ -222,27 +244,27 @@ function Toolbar() {
             <button
               className={`${btn} ${showMinimap ? 'text-blue-400' : ''}`}
               onClick={toggleMinimap}
-              title="Toggle Minimap (⌘M)"
+              title={`Toggle Minimap (${mod}M)`}
             >
               <Map size={ico} />
             </button>
-            <button className={btn} onClick={toggleSearch} title="Search (⌘F)">
+            <button className={btn} onClick={toggleSearch} title={`Search (${mod}F)`}>
               <Search size={ico} />
             </button>
 
             <div className={sep} />
 
-            <button className={btn} onClick={zoomOut} title="Zoom out (⌘-)">
+            <button className={btn} onClick={zoomOut} title={`Zoom out (${mod}-)`}>
               <ZoomOut size={ico} />
             </button>
             <button
               className={`${btn} font-mono tabular-nums min-w-[42px] justify-center text-[11px]`}
               onClick={resetView}
-              title="Reset zoom (⌘0)"
+              title={`Reset zoom (${mod}0)`}
             >
               {Math.round(zoom * 100)}%
             </button>
-            <button className={btn} onClick={zoomIn} title="Zoom in (⌘+)">
+            <button className={btn} onClick={zoomIn} title={`Zoom in (${mod}+)`}>
               <ZoomIn size={ico} />
             </button>
 
@@ -421,36 +443,45 @@ function ThemePicker() {
 
 // ── Shortcuts modal ───────────────────────────────────────────────────────────
 
-const SHORTCUTS: { key: string; desc: string }[] = [
-  { key: '⌘T', desc: 'New Terminal' },
-  { key: '⌘N', desc: 'New Terminal (alias)' },
-  { key: '⌘⇧N', desc: 'New Canvas' },
-  { key: '⌘⇧P', desc: 'New PostgreSQL pane' },
-  { key: '⌘⇧B', desc: 'New Browser pane' },
-  { key: '⌘⇧E', desc: 'New File Viewer' },
-  { key: '⌘W', desc: 'Close focused tile' },
-  { key: '⌘Z', desc: 'Undo' },
-  { key: '⌘⇧Z', desc: 'Redo' },
-  { key: '⌘M', desc: 'Toggle minimap' },
-  { key: '⌘F', desc: 'Toggle search' },
-  { key: '⌘L', desc: 'Start output linking' },
-  { key: '⌘S', desc: 'Save workspace' },
-  { key: '⌘0', desc: 'Reset zoom to 100%' },
-  { key: '⌘⇧D', desc: 'Cycle theme' },
-  { key: '⌘1–9', desc: 'Switch workspace by index' },
-  { key: '⌘+/−', desc: 'Zoom in / out' },
-  { key: 'Tab', desc: 'Focus next tile' },
-  { key: '⇧Tab', desc: 'Focus previous tile' },
-  { key: '?', desc: 'Show this help' },
-  { key: '⌘G', desc: 'Group selected into section' },
-  { key: 'Esc', desc: 'Cancel linking' },
-  { key: 'Space+drag', desc: 'Pan canvas' },
-  { key: '⌘+scroll', desc: 'Zoom canvas' },
-  { key: 'Double-click', desc: 'New terminal at cursor' },
-  { key: 'Right-click tile', desc: 'Context menu (rename, restart, etc.)' },
-]
+function getShortcuts(mod: string): { key: string; desc: string }[] {
+  return [
+    { key: `${mod}T`, desc: 'New Terminal' },
+    { key: `${mod}N`, desc: 'New Terminal (alias)' },
+    { key: `${mod}⇧N`, desc: 'New Canvas' },
+    { key: `${mod}⇧P`, desc: 'New PostgreSQL pane' },
+    { key: `${mod}⇧B`, desc: 'New Browser pane' },
+    { key: `${mod}⇧E`, desc: 'New File Viewer' },
+    { key: `${mod}W`, desc: 'Close focused tile' },
+    { key: `${mod}Z`, desc: 'Undo' },
+    { key: `${mod}⇧Z`, desc: 'Redo' },
+    { key: `${mod}M`, desc: 'Toggle minimap' },
+    { key: `${mod}F`, desc: 'Toggle search' },
+    { key: `${mod}L`, desc: 'Start output linking' },
+    { key: `${mod}S`, desc: 'Save workspace' },
+    { key: `${mod}0`, desc: 'Reset zoom to 100%' },
+    { key: `${mod}⇧D`, desc: 'Cycle theme' },
+    { key: `${mod}1–9`, desc: 'Switch workspace by index' },
+    { key: `${mod}+/−`, desc: 'Zoom in / out' },
+    { key: 'Tab', desc: 'Focus next tile' },
+    { key: '⇧Tab', desc: 'Focus previous tile' },
+    { key: '?', desc: 'Show this help' },
+    { key: `${mod}G`, desc: 'Group selected into section' },
+    { key: `${mod}K`, desc: 'Command palette' },
+    { key: 'Esc', desc: 'Cancel linking' },
+    { key: 'Space+drag', desc: 'Pan canvas' },
+    { key: `${mod}+scroll`, desc: 'Zoom canvas' },
+    { key: 'Double-click', desc: 'New terminal at cursor' },
+    { key: 'Right-click tile', desc: 'Context menu (rename, restart, etc.)' },
+  ]
+}
 
 function ShortcutsModal({ onClose }: { onClose: () => void }) {
+  const [platform, setPlatform] = React.useState<string>('darwin')
+
+  useEffect(() => {
+    window.electronAPI.getPlatform().then(setPlatform)
+  }, [])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -458,6 +489,9 @@ function ShortcutsModal({ onClose }: { onClose: () => void }) {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
+
+  const mod = platform === 'darwin' ? '⌘' : 'Ctrl+'
+  const shortcuts = getShortcuts(mod)
 
   return (
     <div
@@ -478,7 +512,7 @@ function ShortcutsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="space-y-1">
-          {SHORTCUTS.map(({ key, desc }) => (
+          {shortcuts.map(({ key, desc }) => (
             <div key={key} className="flex items-center justify-between py-0.5">
               <span className="text-text-muted text-xs">{desc}</span>
               <kbd className="font-mono text-[11px] bg-black/5 dark:bg-white/10 text-text-secondary px-1.5 py-0.5 rounded border border-border">
@@ -489,6 +523,52 @@ function ShortcutsModal({ onClose }: { onClose: () => void }) {
         </div>
         <p className="mt-4 text-text-muted text-[10px] text-center">Press ? or Esc to close</p>
       </div>
+    </div>
+  )
+}
+
+// ── Resonance bar (cross-tile text highlighting indicator) ───────────────────
+
+function ResonanceBar() {
+  const text = useResonance((s) => s.text)
+  const matches = useResonance((s) => s.matches)
+  const clearResonance = useResonance((s) => s.clearResonance)
+  const tiles = useStore((s) => s.tiles)
+
+  if (!text) return null
+
+  const totalMatches = matches.reduce((sum, m) => sum + m.count, 0)
+
+  return (
+    <div
+      className="fixed bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-1.5 rounded-full shadow-lg z-[9999] text-xs"
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid #f9e2af44',
+        color: '#f9e2af',
+      }}
+    >
+      <span className="font-mono text-[11px] bg-black/20 px-2 py-0.5 rounded max-w-48 truncate">
+        "{text}"
+      </span>
+      <span className="text-text-muted">
+        {totalMatches} matches in {matches.length} tile{matches.length !== 1 ? 's' : ''}
+      </span>
+      {matches.slice(0, 5).map((m) => {
+        const tile = tiles.find((t) => t.id === m.tileId)
+        return (
+          <span key={m.tileId} className="text-[10px] text-text-secondary">
+            {tile?.name ?? m.tileId}: {m.count}
+          </span>
+        )
+      })}
+      <button
+        className="text-text-muted hover:text-white transition-colors cursor-pointer ml-1"
+        onClick={clearResonance}
+        title="Clear resonance"
+      >
+        ×
+      </button>
     </div>
   )
 }

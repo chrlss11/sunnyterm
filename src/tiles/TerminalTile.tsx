@@ -10,6 +10,7 @@ import { TITLE_BAR_H } from './TileContainer'
 import { registerTerminal, unregisterTerminal, getTerminalEntry } from '../lib/terminalRegistry'
 import type { TerminalEntry } from '../lib/terminalRegistry'
 import { stripAnsi } from '../lib/stripAnsi'
+import { markActivity } from '../lib/tileActivity'
 import { InputInterceptor } from '../lib/inputInterceptor'
 import { GhostTextRenderer } from '../lib/ghostTextRenderer'
 import { initHistory, addCommand, findMatch } from '../lib/commandHistory'
@@ -122,14 +123,15 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     const currentTheme = THEMES[themeRef.current as ThemeName] ?? THEMES.dark
     const term = new Terminal({
       theme: currentTheme.terminal,
-      fontFamily: '"Google Sans Mono", Menlo, Monaco, monospace',
+      fontFamily: '"Google Sans Mono", "Cascadia Code", Menlo, Monaco, Consolas, monospace',
       fontSize: 13,
       lineHeight: 1.0,
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 10000,
       allowProposedApi: true,
-      macOptionIsMeta: true
+      macOptionIsMeta: navigator.platform.includes('Mac'),
+      windowsMode: navigator.platform.includes('Win')
     })
 
     const fitAddon = new FitAddon()
@@ -251,6 +253,7 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     const subscribePty = () => {
       const cleanup = window.electronAPI.onPtyData(tileId, (data) => {
         term.write(data)
+        markActivity(tileId)
         interceptor.handleOutput(data) // detect raw mode
         const link = entry.outputLink
         if (link) {
@@ -278,11 +281,11 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
           if (ok) {
             subscribePty()
           } else {
-            return window.electronAPI.ptySpawn(tileId, '', tileCols(tile?.w ?? 640), tileRows(tile?.h ?? 400), cwd).then(subscribePty)
+            return window.electronAPI.ptySpawn(tileId, tile?.shell ?? '', tileCols(tile?.w ?? 640), tileRows(tile?.h ?? 400), cwd).then(subscribePty)
           }
         })
       } else {
-        window.electronAPI.ptySpawn(tileId, '', tileCols(tile?.w ?? 640), tileRows(tile?.h ?? 400), cwd).then(subscribePty)
+        window.electronAPI.ptySpawn(tileId, tile?.shell ?? '', tileCols(tile?.w ?? 640), tileRows(tile?.h ?? 400), cwd).then(subscribePty)
       }
     }).catch((err) => {
       term.write(`\r\n\x1b[31mFailed to spawn PTY: ${err}\x1b[0m\r\n`)
@@ -296,6 +299,21 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
 
     term.onResize(({ cols, rows }) => {
       window.electronAPI.ptyResize(tileId, cols, rows)
+    })
+
+    // Tile Resonance — cross-tile highlighting on text selection
+    term.onSelectionChange(() => {
+      const sel = term.getSelection()
+      if (sel && sel.trim().length >= 2) {
+        // Lazy import to avoid circular deps
+        import('../lib/resonance').then(({ useResonance }) => {
+          useResonance.getState().setResonance(sel.trim())
+        })
+      } else {
+        import('../lib/resonance').then(({ useResonance }) => {
+          useResonance.getState().clearResonance()
+        })
+      }
     })
 
     // Listen for restart requests dispatched from context menu

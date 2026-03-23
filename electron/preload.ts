@@ -118,5 +118,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('fs:getHome'),
 
   fsPickFolder: () =>
-    ipcRenderer.invoke('fs:pickFolder')
+    ipcRenderer.invoke('fs:pickFolder'),
+
+  // Shell management
+  shellsList: () =>
+    ipcRenderer.invoke('shells:list'),
+
+  shellsGetDefault: () =>
+    ipcRenderer.invoke('shells:getDefault'),
+
+  shellsSetDefault: (shellPath: string) =>
+    ipcRenderer.invoke('shells:setDefault', shellPath),
+
+  // Platform info
+  getPlatform: () =>
+    ipcRenderer.invoke('platform'),
+
+  // Docker operations
+  dockerList: () =>
+    ipcRenderer.invoke('docker:list'),
+
+  dockerLogs: (containerId: string) =>
+    ipcRenderer.invoke('docker:logs', containerId),
+
+  // MCP Bridge — listen for IPC from main process MCP server
+  onMcpMessage: (channel: string, callback: (...args: any[]) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, ...args: any[]) => callback(...args)
+    ipcRenderer.on(channel, handler)
+    return () => ipcRenderer.removeListener(channel, handler)
+  },
+
+  mcpRespond: (channel: string, data: unknown) => {
+    ipcRenderer.send(channel, data)
+  }
 })

@@ -5,8 +5,14 @@ import { HttpTile } from './HttpTile'
 import { PostgresTile } from './PostgresTile'
 import { BrowserTile } from './BrowserTile'
 import { FileViewerTile, resetFileViewerState } from './FileViewerTile'
-import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal } from 'lucide-react'
+import { LensTile } from './LensTile'
+import { DockerTile } from './DockerTile'
+import { ChartTile } from './ChartTile'
+import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal, Terminal, BarChart3 } from 'lucide-react'
+import { getTerminalEntry } from '../lib/terminalRegistry'
+import type { ShellInfo } from '../types'
 import { TileKindIcon } from './TileKindIcon'
+import { SemanticZoom } from './SemanticZoom'
 import type { Tile } from '../types'
 
 export const TITLE_BAR_H = 28
@@ -51,11 +57,18 @@ export function TileContainer({ tile, isSelected }: Props) {
   const focusedId = useStore((s) => s.focusedId)
   const exitedTileIds = useStore((s) => s.exitedTileIds)
   const viewMode = useStore((s) => s.viewMode)
+  const zoom = useStore((s) => s.zoom)
   const { focusTile, removeTile, renameTile, spawnTile, startLinking } = useStore()
   const isFocused = focusedId === tile.id
   const isExited = exitedTileIds.includes(tile.id)
 
   const showContent = viewMode === 'canvas'
+
+  // Semantic zoom: determine which representation to show based on zoom level
+  const semanticMode: 'full' | 'summary' | 'badge' =
+    zoom >= 0.8 ? 'full' :
+    zoom >= 0.6 ? 'summary' :
+    'badge'
 
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(tile.name)
@@ -153,6 +166,16 @@ export function TileContainer({ tile, isSelected }: Props) {
     setTimeout(() => renameInputRef.current?.select(), 0)
   }, [tile.name])
 
+  const handleVisualizeSelection = useCallback(() => {
+    setCtxMenuOpen(false)
+    if (tile.kind !== 'terminal') return
+    const entry = getTerminalEntry(tile.id)
+    const selection = entry?.terminal.getSelection()
+    if (!selection || !selection.trim()) return
+    const chartTile = spawnTile('chart', tile.x + tile.w + 30, tile.y, undefined, undefined, undefined, selection)
+    renameTile(chartTile.id, `Chart (${tile.name})`)
+  }, [tile, spawnTile, renameTile])
+
   const handleClose = useCallback(() => {
     setCtxMenuOpen(false)
     removeTile(tile.id)
@@ -239,14 +262,20 @@ export function TileContainer({ tile, isSelected }: Props) {
         {/* Content area — skip rendering when canvas is hidden (focus mode)
             to avoid competing with FocusView for xterm/webview elements */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {showContent && (
+          {showContent && semanticMode === 'full' && (
             <TileErrorBoundary tileId={tile.id}>
               {tile.kind === 'terminal' && <TerminalTile tileId={tile.id} />}
               {tile.kind === 'http' && <HttpTile tileId={tile.id} />}
               {tile.kind === 'postgres' && <PostgresTile tileId={tile.id} />}
               {tile.kind === 'browser' && <BrowserTile tileId={tile.id} />}
               {tile.kind === 'file' && <FileViewerTile tileId={tile.id} />}
+              {tile.kind === 'lens' && <LensTile tileId={tile.id} />}
+              {tile.kind === 'docker' && <DockerTile tileId={tile.id} />}
+              {tile.kind === 'chart' && <ChartTile tileId={tile.id} />}
             </TileErrorBoundary>
+          )}
+          {showContent && semanticMode !== 'full' && (
+            <SemanticZoom tile={tile} mode={semanticMode} />
           )}
         </div>
 
@@ -273,6 +302,7 @@ export function TileContainer({ tile, isSelected }: Props) {
           onRestartTerminal={handleRestartTerminal}
           onCopyCwd={handleCopyCwd}
           onLinkOutput={handleLinkOutput}
+          onVisualizeSelection={handleVisualizeSelection}
         />
       )}
     </div>
@@ -289,21 +319,31 @@ interface CtxMenuProps {
   onRestartTerminal: () => void
   onCopyCwd: () => void
   onLinkOutput: () => void
+  onVisualizeSelection: () => void
 }
 
 const ContextMenu = React.forwardRef<HTMLDivElement, CtxMenuProps>(function ContextMenu(
-  { tile, onRename, onDuplicate, onClose, onRestartTerminal, onCopyCwd, onLinkOutput },
+  { tile, onRename, onDuplicate, onClose, onRestartTerminal, onCopyCwd, onLinkOutput, onVisualizeSelection },
   ref
 ) {
   const item = 'flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors'
   const sep = 'my-0.5 border-t border-border'
   const iconSize = 12
+  const [shells, setShells] = useState<ShellInfo[]>([])
+  const [showShells, setShowShells] = useState(false)
+  const { spawnTile } = useStore()
+
+  useEffect(() => {
+    if (tile.kind === 'terminal') {
+      window.electronAPI.shellsList().then(setShells)
+    }
+  }, [tile.kind])
 
   return (
     <div
       ref={ref}
       style={{ position: 'absolute', right: 0, top: TITLE_BAR_H, zIndex: 99999 }}
-      className="w-40 rounded border border-border bg-tile shadow-xl py-1"
+      className="w-44 rounded border border-border bg-tile shadow-xl py-1"
       onMouseDown={(e) => e.stopPropagation()}
     >
       <div className={item} onClick={onRename}><Pencil size={iconSize} /> Rename</div>
@@ -313,6 +353,35 @@ const ContextMenu = React.forwardRef<HTMLDivElement, CtxMenuProps>(function Cont
         <>
           <div className={item} onClick={onRestartTerminal}><RotateCcw size={iconSize} /> Restart</div>
           <div className={item} onClick={onCopyCwd}><ClipboardCopy size={iconSize} /> Copy CWD</div>
+          <div className={item} onClick={onVisualizeSelection}><BarChart3 size={iconSize} /> Visualize Selection</div>
+          {shells.length > 1 && (
+            <div className="relative">
+              <div
+                className={item}
+                onClick={() => setShowShells(!showShells)}
+              >
+                <Terminal size={iconSize} /> New with shell...
+              </div>
+              {showShells && (
+                <div
+                  className="absolute right-full top-0 mr-1 w-44 rounded border border-border bg-tile shadow-xl py-1"
+                >
+                  {shells.map((s) => (
+                    <div
+                      key={s.id}
+                      className={item}
+                      onClick={() => {
+                        spawnTile('terminal', tile.x + 30, tile.y + 30, undefined, undefined, s.path)
+                      }}
+                    >
+                      <span className="text-[10px] font-mono text-text-muted w-4 text-center">&gt;</span>
+                      {s.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
       <div className={item} onClick={onLinkOutput}><Link size={iconSize} /> Link Output</div>

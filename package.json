@@ -11,7 +11,9 @@
     "start": "electron-vite dev",
     "dist": "electron-vite build && electron-builder --mac --arm64 --x64",
     "dist:arm64": "electron-vite build && electron-builder --mac --arm64",
-    "dist:x64": "electron-vite build && electron-builder --mac --x64"
+    "dist:x64": "electron-vite build && electron-builder --mac --x64",
+    "dist:win": "electron-vite build && electron-builder --win --x64",
+    "dist:linux": "electron-vite build && electron-builder --linux --x64"
   },
   "keywords": [
     "terminal",
@@ -66,6 +68,48 @@
           "path": "/Applications"
         }
       ]
+    },
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico"
+    },
+    "linux": {
+      "icon": "resources/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development"
     }
   },
   "devDependencies": {
@@ -94,6 +138,7 @@
     "zustand": "^5.0.12"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "electron-store": "^8.2.0",
     "node-pty": "^1.1.0",
     "pg": "^8.20.0",

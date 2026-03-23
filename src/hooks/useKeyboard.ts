@@ -4,27 +4,37 @@ import { useStore } from '../store'
 /**
  * Global keyboard shortcuts
  *
- * Cmd+T / Cmd+N   — new terminal tile
- * Cmd+Shift+N     — new HTTP tile
- * Cmd+Shift+P     — new PostgreSQL tile
- * Cmd+W           — close focused tile
- * Cmd+Z           — undo
- * Cmd+Shift+Z     — redo
- * Cmd+M           — toggle minimap
- * Cmd+F           — toggle search
- * Cmd+L           — start linking (focused tile → next clicked tile)
- * Cmd+S           — save current workspace
- * Cmd+0           — reset zoom to 100% and center
- * Cmd+Shift+D     — toggle dark/light mode
- * Cmd+1-9         — switch to workspace by index
- * Cmd+Q           — quit
+ * Mod+T / Mod+N   — new terminal tile        (Cmd on macOS, Ctrl on Win/Linux)
+ * Mod+Shift+N     — new HTTP tile
+ * Mod+Shift+P     — new PostgreSQL tile
+ * Mod+W           — close focused tile
+ * Mod+Z           — undo
+ * Mod+Shift+Z     — redo
+ * Mod+M           — toggle minimap
+ * Mod+F           — toggle search
+ * Mod+L           — start linking (focused tile → next clicked tile)
+ * Mod+S           — save current workspace
+ * Mod+0           — reset zoom to 100% and center
+ * Mod+Shift+D     — toggle dark/light mode
+ * Mod+1-9         — switch to workspace by index
+ * Mod+Q           — quit
  * Tab / Shift+Tab — cycle focus between tiles
  * ?               — show keyboard shortcuts
  * Escape          — cancel linking
  *
- * NOTE: e.ctrlKey is intentionally NOT included in the meta check so that
- * Ctrl+C / Ctrl+D / Ctrl+Z / Ctrl+L etc. pass through to the terminal.
+ * On macOS: e.metaKey (Cmd) is the modifier.
+ * On Windows/Linux: e.ctrlKey is the modifier, BUT only when the focused
+ * element is NOT a terminal (to let Ctrl+C/D/Z pass through to shells).
  */
+
+// Cache the platform so we know which modifier to use
+let _platform: string | null = null
+async function getPlatformCached(): Promise<string> {
+  if (!_platform) _platform = await window.electronAPI.getPlatform()
+  return _platform
+}
+// Eagerly fetch on module load
+getPlatformCached()
 export function useKeyboard() {
   const {
     spawnTile, removeTile,
@@ -42,7 +52,9 @@ export function useKeyboard() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const meta = e.metaKey
+      // On macOS use Cmd, on Windows/Linux use Ctrl
+      const isMac = _platform === 'darwin'
+      const meta = isMac ? e.metaKey : e.ctrlKey
 
       // Ctrl+Tab — toggle canvas/focus view (capture phase handles this below)
 
@@ -212,9 +224,11 @@ export function useKeyboard() {
       }
     }
 
-    // Cmd+Arrow in capture phase — cycle tiles in focus mode even when terminal is focused
+    // Mod+Arrow in capture phase — cycle tiles in focus mode even when terminal is focused
     const handleCtrlArrow = (e: KeyboardEvent) => {
-      if (!e.metaKey || e.altKey || e.ctrlKey) return
+      const isMac = _platform === 'darwin'
+      const modPressed = isMac ? e.metaKey : e.ctrlKey
+      if (!modPressed || e.altKey || (isMac && e.ctrlKey) || (!isMac && e.metaKey)) return
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
 
       const { viewMode, tiles, focusedId: fid, focusTile: focus } = useStore.getState()

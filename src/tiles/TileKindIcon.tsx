@@ -58,6 +58,30 @@ export function TileKindIcon({ kind, active, exited, size = 14 }: Props) {
         <path d="M4 1h5.5L13 4.5V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1Z" />
         <path d="M9.5 1v3.5H13" />
       </svg>
+    ),
+    lens: (
+      <svg width={s} height={s} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity }}>
+        <circle cx="7" cy="7" r="4" />
+        <path d="M10 10l3.5 3.5" />
+        <path d="M5 7h4" />
+      </svg>
+    ),
+    chart: (
+      <svg width={s} height={s} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity }}>
+        <path d="M3 13V8" />
+        <path d="M7 13V5" />
+        <path d="M11 13V3" />
+      </svg>
+    ),
+    docker: (
+      <svg width={s} height={s} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity }}>
+        <rect x="1" y="6" width="3" height="2.5" rx="0.3" />
+        <rect x="4.5" y="6" width="3" height="2.5" rx="0.3" />
+        <rect x="8" y="6" width="3" height="2.5" rx="0.3" />
+        <rect x="4.5" y="3" width="3" height="2.5" rx="0.3" />
+        <rect x="8" y="3" width="3" height="2.5" rx="0.3" />
+        <path d="M14 9.5c-1 1-2.5 2.5-5 3-1.5.3-3 .3-4.5 0C2.5 12 1.5 10.5 1 9" />
+      </svg>
     )
   }
 

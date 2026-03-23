@@ -4,6 +4,9 @@ import { TileContainer, TITLE_BAR_H } from '../tiles/TileContainer'
 import { SectionBox } from './SectionBox'
 import { Minimap } from '../minimap/Minimap'
 import { parseCurl } from '../lib/parseCurl'
+import { TrailOverlay } from './TrailOverlay'
+import { TrailControls } from './TrailControls'
+import { CommandPalette, TargetingOverlay, type SpatialAction } from './CommandPalette'
 import { AlignStartVertical, AlignEndVertical, AlignStartHorizontal, AlignEndHorizontal, AlignCenterVertical, AlignCenterHorizontal, Rows3, Columns3, LayoutGrid, Terminal, Globe, Database, Compass, FolderOpen } from 'lucide-react'
 import type { DragState, Tile } from '../types'
 
@@ -65,6 +68,8 @@ export function InfiniteCanvas() {
   const lassoStart = useRef({ x: 0, y: 0 })
   const [alignMenu, setAlignMenu] = useState<{ x: number; y: number } | null>(null)
   const [createMenu, setCreateMenu] = useState<{ x: number; y: number; canvasX: number; canvasY: number } | null>(null)
+  const [showPalette, setShowPalette] = useState(false)
+  const [targetingAction, setTargetingAction] = useState<SpatialAction | null>(null)
   const rightClickStart = useRef<{ x: number; y: number } | null>(null)
   const clickStart = useRef<{ x: number; y: number; canvasX: number; canvasY: number } | null>(null)
 
@@ -82,10 +87,45 @@ export function InfiniteCanvas() {
     [panX, panY, zoom]
   )
 
-  // ── Keyboard (Space for pan) ──────────────────────────────────────────────
+  // ── Handle spatial targeting completion ────────────────────────────────────
+
+  const handlePlacement = useCallback((canvasX: number, canvasY: number) => {
+    if (!targetingAction) return
+    const snapX = Math.round(canvasX / 12) * 12
+    const snapY = Math.round(canvasY / 12) * 12
+
+    switch (targetingAction.type) {
+      case 'run': {
+        const tile = spawnTile('terminal', snapX, snapY)
+        if (targetingAction.name) {
+          useStore.getState().renameTile(tile.id, targetingAction.name)
+        }
+        if (targetingAction.command) {
+          setTimeout(() => {
+            window.electronAPI.ptyWrite(tile.id, targetingAction.command + '\n')
+          }, 600)
+        }
+        break
+      }
+      case 'spawn':
+        spawnTile(targetingAction.kind, snapX, snapY)
+        break
+      case 'connect':
+        break
+    }
+    setTargetingAction(null)
+  }, [targetingAction, spawnTile])
+
+  // ── Keyboard (Space for pan, Cmd+K for palette) ────────────────────────────
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const isMod = navigator.platform.includes('Mac') ? e.metaKey : e.ctrlKey
+      if (isMod && e.key === 'k') {
+        e.preventDefault()
+        setShowPalette(true)
+        return
+      }
       if (e.code === 'Space' && e.target === document.body) {
         spaceHeld.current = true
         if (containerRef.current) containerRef.current.style.cursor = 'grab'
@@ -97,10 +137,10 @@ export function InfiniteCanvas() {
         if (containerRef.current) containerRef.current.style.cursor = 'default'
       }
     }
-    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('keyup', onKeyUp)
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('keyup', onKeyUp)
     }
   }, [])
@@ -418,10 +458,16 @@ export function InfiniteCanvas() {
             }}
           />
         )}
+
+        {/* Canvas trail overlay (inside canvas transform) */}
+        <TrailOverlay />
       </div>
 
       {/* Link lines overlay (screen-space SVG, not scaled by canvas transform) */}
       <LinkLines tiles={tiles} panX={panX} panY={panY} zoom={zoom} />
+
+      {/* Canvas trail controls (floating, bottom-left) */}
+      <TrailControls />
 
       {/* Minimap (fixed overlay, not affected by canvas transform) */}
       {showMinimap && <Minimap />}
@@ -445,6 +491,23 @@ export function InfiniteCanvas() {
           canvasY={createMenu.canvasY}
           containerRef={containerRef}
           onClose={() => setCreateMenu(null)}
+        />
+      )}
+
+      {/* Spatial Command Palette */}
+      {showPalette && (
+        <CommandPalette
+          onClose={() => setShowPalette(false)}
+          onStartTargeting={(action) => setTargetingAction(action)}
+        />
+      )}
+
+      {/* Targeting overlay (click to place) */}
+      {targetingAction && (
+        <TargetingOverlay
+          action={targetingAction}
+          onCancel={() => setTargetingAction(null)}
+          onPlace={handlePlacement}
         />
       )}
     </div>
