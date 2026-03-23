@@ -104,6 +104,10 @@ export interface CanvasStore {
   exitedTileIds: string[]
   /** When true, tiles auto-arrange in grid after every move/resize/create */
   autoGrid: boolean
+  /** When true, canvas switches to kanban column layout */
+  kanbanMode: boolean
+  /** Stack of recently closed tiles for undo-close (max 20) */
+  closedTileStack: Tile[]
 
   // ── Workspace ──────────────────────────────────────────────────────────────
   /** Named workspaces available (excludes __default__) */
@@ -166,6 +170,8 @@ export interface CanvasStore {
   toggleShortcuts: () => void
   toggleConfirmClear: () => void
   toggleAutoGrid: () => void
+  toggleKanbanMode: () => void
+  restoreClosedTile: () => void
   clearCanvas: () => void
   triggerSavedToast: () => void
 
@@ -227,6 +233,74 @@ function runAutoGrid(get: () => CanvasStore, set: (fn: any) => void) {
   }))
 }
 
+/** Layout tiles in kanban columns based on sections */
+function runKanbanLayout(get: () => CanvasStore, set: (fn: any) => void) {
+  const { tiles, sections } = get()
+  if (sections.length === 0 || tiles.length === 0) return
+
+  const GAP = 24
+  const HEADER_H = 40
+  const viewportW = window.innerWidth
+  const colWidth = Math.max(400, (viewportW - GAP * (sections.length + 1)) / sections.length)
+
+  const updatedTiles = [...tiles]
+  const updatedSections = [...sections]
+
+  updatedSections.forEach((section, colIdx) => {
+    const colX = GAP + colIdx * (colWidth + GAP)
+
+    // Find tiles within this section's bounds
+    const sectionTiles = updatedTiles.filter(t => {
+      const cx = t.x + t.w / 2
+      const cy = t.y + t.h / 2
+      return cx >= section.x && cx <= section.x + section.w &&
+             cy >= section.y && cy <= section.y + section.h
+    })
+
+    let currentY = GAP + HEADER_H + GAP
+    sectionTiles.forEach(tile => {
+      const idx = updatedTiles.findIndex(t => t.id === tile.id)
+      if (idx !== -1) {
+        updatedTiles[idx] = { ...updatedTiles[idx], x: snapToGrid(colX), y: snapToGrid(currentY), w: snapToGrid(colWidth) }
+        currentY += updatedTiles[idx].h + GAP
+      }
+    })
+
+    updatedSections[colIdx] = {
+      ...section,
+      x: snapToGrid(colX),
+      y: snapToGrid(GAP),
+      w: snapToGrid(colWidth),
+      h: snapToGrid(Math.max(400, currentY + GAP))
+    }
+  })
+
+  // Handle unassigned tiles — place them in the first section
+  const unassigned = updatedTiles.filter(t => {
+    return !updatedSections.some(sec => {
+      const cx = t.x + t.w / 2
+      const cy = t.y + t.h / 2
+      return cx >= sec.x && cx <= sec.x + sec.w &&
+             cy >= sec.y && cy <= sec.y + sec.h
+    })
+  })
+
+  if (unassigned.length > 0 && updatedSections.length > 0) {
+    const firstSec = updatedSections[0]
+    let currentY = firstSec.y + firstSec.h
+    unassigned.forEach(tile => {
+      const idx = updatedTiles.findIndex(t => t.id === tile.id)
+      if (idx !== -1) {
+        updatedTiles[idx] = { ...updatedTiles[idx], x: snapToGrid(firstSec.x), y: snapToGrid(currentY), w: snapToGrid(firstSec.w) }
+        currentY += updatedTiles[idx].h + GAP
+      }
+    })
+    updatedSections[0] = { ...firstSec, h: snapToGrid(Math.max(firstSec.h, currentY + GAP)) }
+  }
+
+  set({ tiles: updatedTiles, sections: updatedSections })
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useStore = create<CanvasStore>()(
@@ -253,6 +327,8 @@ export const useStore = create<CanvasStore>()(
     savedToast: false,
     exitedTileIds: [],
     autoGrid: false,
+    kanbanMode: false,
+    closedTileStack: [],
     workspaces: [],
     activeWorkspace: null,
     tileCwds: {},
@@ -351,7 +427,7 @@ export const useStore = create<CanvasStore>()(
         w: tileW,
         h: tileH,
         name: (() => {
-          const base = kind === 'terminal' ? 'Terminal' : kind === 'http' ? 'HTTP' : kind === 'postgres' ? 'PostgreSQL' : kind === 'file' ? 'Files' : kind === 'lens' ? 'Lens' : kind === 'chart' ? 'Chart' : kind === 'docker' ? 'Docker' : 'Browser'
+          const base = kind === 'terminal' ? 'Terminal' : kind === 'http' ? 'HTTP' : kind === 'postgres' ? 'PostgreSQL' : kind === 'file' ? 'Files' : kind === 'lens' ? 'Lens' : kind === 'chart' ? 'Chart' : kind === 'docker' ? 'Docker' : kind === 'inspector' ? 'Inspector' : 'Browser'
           const count = tiles.filter((t) => t.kind === kind).length + 1
           return `${base} ${count}`
         })(),
@@ -368,6 +444,8 @@ export const useStore = create<CanvasStore>()(
       set((s) => ({ tiles: [...s.tiles, tile], focusedId: tile.id }))
       // Auto-grid after spawn
       if (get().autoGrid) setTimeout(() => runAutoGrid(get, set), 50)
+      // Re-layout kanban after spawn
+      if (get().kanbanMode) setTimeout(() => runKanbanLayout(get, set), 50)
       return tile
     },
 
@@ -375,7 +453,9 @@ export const useStore = create<CanvasStore>()(
       const tile = get().tiles.find((t) => t.id === id)
       if (!tile) return
       pushUndo(get, set, { type: 'delete', snapshot: { ...tile } })
+      // Push to closed tile stack for undo-close
       set((s) => ({
+        closedTileStack: [{ ...tile }, ...s.closedTileStack].slice(0, 20),
         tiles: s.tiles
           .filter((t) => t.id !== id)
           .map((t) => ({ ...t, outputLink: t.outputLink === id ? null : t.outputLink })),
@@ -677,6 +757,8 @@ export const useStore = create<CanvasStore>()(
       set({ drag: null })
       // Auto-grid after drag
       if (get().autoGrid) runAutoGrid(get, set)
+      // Re-layout kanban after drag
+      if (get().kanbanMode) runKanbanLayout(get, set)
     },
 
     // ── UI ────────────────────────────────────────────────────────────────────
@@ -690,6 +772,45 @@ export const useStore = create<CanvasStore>()(
       const next = !get().autoGrid
       set({ autoGrid: next })
       if (next) runAutoGrid(get, set)
+    },
+    toggleKanbanMode: () => {
+      const next = !get().kanbanMode
+      if (next) {
+        // Disable autoGrid if enabling kanban
+        set({ kanbanMode: true, autoGrid: false })
+        // If no sections exist, create 3 default columns
+        if (get().sections.length === 0) {
+          const names = ['Monitoring', 'Development', 'Production']
+          const GAP = 24
+          const viewportW = window.innerWidth
+          const colWidth = Math.max(400, (viewportW - GAP * (names.length + 1)) / names.length)
+          const newSections = names.map((name, i) => ({
+            id: nextSectionId(),
+            name,
+            x: snapToGrid(GAP + i * (colWidth + GAP)),
+            y: snapToGrid(GAP),
+            w: snapToGrid(colWidth),
+            h: snapToGrid(600)
+          }))
+          set({ sections: newSections })
+        }
+        runKanbanLayout(get, set)
+      } else {
+        set({ kanbanMode: false })
+      }
+    },
+    restoreClosedTile: () => {
+      const { closedTileStack } = get()
+      if (closedTileStack.length === 0) return
+      const [restored, ...rest] = closedTileStack
+      const newTile = { ...restored, id: `tile-${Date.now()}-restored`, zIndex: nextZIndex(get().tiles) }
+      set((s: CanvasStore) => ({
+        tiles: [...s.tiles, newTile],
+        closedTileStack: rest,
+        focusedId: newTile.id,
+      }))
+      if (get().autoGrid) setTimeout(() => runAutoGrid(get, set), 50)
+      toast.success(`Tile "${restored.name}" restaurado`)
     },
     clearCanvas: () => {
       const { tiles } = get()

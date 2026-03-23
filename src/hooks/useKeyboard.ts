@@ -37,7 +37,7 @@ async function getPlatformCached(): Promise<string> {
 getPlatformCached()
 export function useKeyboard() {
   const {
-    spawnTile, removeTile,
+    spawnTile, removeTile, restoreClosedTile,
     undo, redo,
     toggleMinimap, toggleSearch,
     startLinking, cancelLinking,
@@ -129,7 +129,11 @@ export function useKeyboard() {
       switch (e.key.toLowerCase()) {
         case 't':
           e.preventDefault()
-          spawnTile('terminal')
+          if (e.shiftKey) {
+            restoreClosedTile() // Mod+Shift+T — restore last closed tile
+          } else {
+            spawnTile('terminal')
+          }
           break
         case 'n':
           e.preventDefault()

@@ -1,6 +1,6 @@
 // ─── Tile kinds ───────────────────────────────────────────────────────────────
 
-export type TileKind = 'terminal' | 'http' | 'postgres' | 'browser' | 'file' | 'lens' | 'chart' | 'docker'
+export type TileKind = 'terminal' | 'http' | 'postgres' | 'browser' | 'file' | 'lens' | 'chart' | 'docker' | 'inspector'
 
 // ─── Section (Figma-style grouping) ──────────────────────────────────────────
 
@@ -189,6 +189,35 @@ export interface ElectronAPI {
   // MCP Bridge
   onMcpMessage: (channel: string, callback: (...args: any[]) => void) => () => void
   mcpRespond: (channel: string, data: unknown) => void
+
+  // Quick Terminal
+  quickTerminalToggle: () => Promise<void>
+
+  // Config hot-reload
+  configLoad: () => Promise<SunnyTermConfig>
+  configSave: (partial: Partial<SunnyTermConfig>) => Promise<void>
+  onConfigChanged: (callback: (changed: Partial<SunnyTermConfig>) => void) => () => void
+}
+
+// ─── Config types ─────────────────────────────────────────────────────────────
+
+export interface SunnyTermConfig {
+  // Terminal
+  fontFamily?: string
+  fontSize?: number
+  lineHeight?: number
+  cursorStyle?: 'block' | 'underline' | 'bar'
+  cursorBlink?: boolean
+  scrollback?: number
+
+  // Canvas
+  gridSnap?: number
+  defaultTileWidth?: number
+  defaultTileHeight?: number
+
+  // Behavior
+  confirmOnQuit?: boolean
+  autoSaveInterval?: number
 }
 
 // ─── Shell types ─────────────────────────────────────────────────────────────

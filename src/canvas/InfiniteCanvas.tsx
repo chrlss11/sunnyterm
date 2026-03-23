@@ -7,6 +7,7 @@ import { parseCurl } from '../lib/parseCurl'
 import { TrailOverlay } from './TrailOverlay'
 import { TrailControls } from './TrailControls'
 import { CommandPalette, TargetingOverlay, type SpatialAction } from './CommandPalette'
+import { KanbanOverlay } from './KanbanOverlay'
 import { AlignStartVertical, AlignEndVertical, AlignStartHorizontal, AlignEndHorizontal, AlignCenterVertical, AlignCenterHorizontal, Rows3, Columns3, LayoutGrid, Terminal, Globe, Database, Compass, FolderOpen } from 'lucide-react'
 import type { DragState, Tile, TileKind } from '../types'
 
@@ -437,6 +438,9 @@ export function InfiniteCanvas() {
         {sections.map((section) => (
           <SectionBox key={section.id} section={section} />
         ))}
+
+        {/* Kanban column headers (on top of sections, behind tiles) */}
+        <KanbanOverlay />
 
         {/* Tiles */}
         {sortedTiles.map((tile) => (

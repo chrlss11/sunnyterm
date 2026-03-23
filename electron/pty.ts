@@ -1,5 +1,6 @@
 import * as nodePty from 'node-pty'
 import { execSync } from 'child_process'
+import { getShellIntegration } from './shellIntegration'
 
 interface PtyEntry {
   pty: nodePty.IPty
@@ -48,6 +49,15 @@ export class PtyManager {
     })
 
     this.ptys.set(id, { pty, pid: pty.pid })
+
+    // Inject shell integration script (OSC 133 command boundaries)
+    const integration = getShellIntegration(shell)
+    if (integration) {
+      setTimeout(() => {
+        pty.write(integration + '\nclear\n')
+      }, 200)
+    }
+
     return pty.pid
   }
 

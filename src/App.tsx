@@ -5,10 +5,11 @@ import { WorkspacePicker } from './workspace/WorkspacePicker'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useStore, DEFAULT_WORKSPACE } from './store'
 import { FocusView } from './focus/FocusView'
-import { Terminal, Globe, Database, Compass, FolderOpen, Undo2, Redo2, Map, Search, Palette, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen, ChevronDown, Container, LayoutGrid } from 'lucide-react'
+import { Terminal, Globe, Database, Compass, FolderOpen, Undo2, Redo2, Map, Search, Palette, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen, ChevronDown, Container, LayoutGrid, PanelTop, Columns3 } from 'lucide-react'
 import { ShellPicker } from './tiles/ShellPicker'
 import { THEMES, THEME_ORDER, applyThemeCss, type ThemeName } from './lib/themes'
 import { initMcpBridge } from './lib/mcpBridge'
+import { initConfigBridge } from './lib/configBridge'
 import { UpdateNotification } from './lib/UpdateNotification'
 import { useResonance } from './lib/resonance'
 import type { ViewMode } from './types'
@@ -69,6 +70,7 @@ function AppInner() {
     initializedRef.current = true
     initFromPersisted()
     initMcpBridge() // Start MCP bridge for Claude Code integration
+    initConfigBridge() // Start config hot-reload bridge
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Debounced auto-save on meaningful canvas changes ──────────────────────
@@ -262,6 +264,13 @@ function Toolbar() {
             </button>
             <button className={btn} onClick={toggleSearch} title={`Search (${mod}F)`}>
               <Search size={ico} />
+            </button>
+            <button
+              className={btn}
+              onClick={() => window.electronAPI.quickTerminalToggle()}
+              title="Quick Terminal Mode (Ctrl+`)"
+            >
+              <PanelTop size={ico} />
             </button>
 
             <div className={sep} />
@@ -482,7 +491,9 @@ function getShortcuts(mod: string): { key: string; desc: string }[] {
     { key: '?', desc: 'Show this help' },
     { key: `${mod}G`, desc: 'Group selected into section' },
     { key: `${mod}K`, desc: 'Command palette' },
+    { key: `${mod}⇧T`, desc: 'Restore closed tile' },
     { key: 'Esc', desc: 'Cancel linking' },
+    { key: 'Ctrl+`', desc: 'Quick Terminal (show/hide)' },
     { key: 'Space+drag', desc: 'Pan canvas' },
     { key: `${mod}+scroll`, desc: 'Zoom canvas' },
     { key: 'Double-click', desc: 'New terminal at cursor' },

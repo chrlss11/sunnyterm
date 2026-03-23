@@ -206,5 +206,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   mcpRespond: (channel: string, data: unknown) => {
     ipcRenderer.send(channel, data)
+  },
+
+  // Quick Terminal
+  quickTerminalToggle: () =>
+    ipcRenderer.invoke('quickTerminal:toggle'),
+
+  // Config hot-reload
+  configLoad: () =>
+    ipcRenderer.invoke('config:load'),
+
+  configSave: (partial: Record<string, unknown>) =>
+    ipcRenderer.invoke('config:save', partial),
+
+  onConfigChanged: (callback: (changed: Record<string, unknown>) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, changed: Record<string, unknown>) => callback(changed)
+    ipcRenderer.on('config:changed', handler)
+    return () => ipcRenderer.removeListener('config:changed', handler)
   }
 })

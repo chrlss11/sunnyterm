@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { WebLinksAddon } from '@xterm/addon-web-links'
+import type { ILink, ILinkProvider } from '@xterm/xterm'
 import { SearchAddon } from '@xterm/addon-search'
 
 import '@xterm/xterm/css/xterm.css'
@@ -11,6 +11,7 @@ import { registerTerminal, unregisterTerminal, getTerminalEntry } from '../lib/t
 import type { TerminalEntry } from '../lib/terminalRegistry'
 import { stripAnsi } from '../lib/stripAnsi'
 import { markActivity } from '../lib/tileActivity'
+import { registerCommandParser, findPreviousPrompt, findNextPrompt, clearCommands } from '../lib/commandMarkers'
 import { InputInterceptor } from '../lib/inputInterceptor'
 import { GhostTextRenderer } from '../lib/ghostTextRenderer'
 import { initHistory, addCommand, findMatch } from '../lib/commandHistory'
@@ -135,16 +136,107 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     })
 
     const fitAddon = new FitAddon()
-    const webLinksAddon = new WebLinksAddon((_event, uri) => {
-      window.open(uri, '_blank')
-    })
     const searchAddon = new SearchAddon()
 
     term.loadAddon(fitAddon)
-    term.loadAddon(webLinksAddon)
     term.loadAddon(searchAddon)
 
     term.open(xtermElement)
+
+    // ── Shell Integration: register OSC 133 command boundary parser ────────
+    registerCommandParser(tileId, term)
+
+    // ── Smart Links: custom link provider for URLs, file paths, Docker IDs ─
+    const smartLinkProvider: ILinkProvider = {
+      provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void) {
+        const line = term.buffer.active.getLine(bufferLineNumber - 1)
+        if (!line) { callback(undefined); return }
+        const text = line.translateToString(true)
+        const links: ILink[] = []
+
+        // File paths with optional line:col — /path/to/file.ts:42:10
+        const filePathRegex = /(?:^|\s)((?:\/[\w.\-+@]+)+(?::(\d+)(?::(\d+))?)?)/g
+        let match: RegExpExecArray | null
+        while ((match = filePathRegex.exec(text)) !== null) {
+          const startIndex = match.index + (match[0][0] === ' ' ? 1 : 0)
+          const matchText = match[1]
+          links.push({
+            range: {
+              start: { x: startIndex + 1, y: bufferLineNumber },
+              end: { x: startIndex + matchText.length + 1, y: bufferLineNumber }
+            },
+            text: matchText,
+            activate(_event: MouseEvent, linkText: string) {
+              const parts = linkText.split(':')
+              const filePath = parts[0]
+              useStore.getState().spawnTile('file', undefined, undefined, undefined, filePath)
+            }
+          })
+        }
+
+        // URLs (http/https)
+        const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g
+        while ((match = urlRegex.exec(text)) !== null) {
+          const urlText = match[0]
+          const urlIndex = match.index
+          links.push({
+            range: {
+              start: { x: urlIndex + 1, y: bufferLineNumber },
+              end: { x: urlIndex + urlText.length + 1, y: bufferLineNumber }
+            },
+            text: urlText,
+            activate(_event: MouseEvent, linkText: string) {
+              useStore.getState().spawnTile('browser', undefined, undefined, linkText)
+            }
+          })
+        }
+
+        // Docker container IDs (12+ hex chars preceded by docker context)
+        const dockerRegex = /\b([0-9a-f]{12,64})\b/g
+        while ((match = dockerRegex.exec(text)) !== null) {
+          const before = text.substring(Math.max(0, match.index - 20), match.index)
+          if (/container|docker|CONTAINER/i.test(before)) {
+            const dockerText = match[0]
+            const dockerIndex = match.index
+            links.push({
+              range: {
+                start: { x: dockerIndex + 1, y: bufferLineNumber },
+                end: { x: dockerIndex + dockerText.length + 1, y: bufferLineNumber }
+              },
+              text: dockerText,
+              activate() {
+                useStore.getState().spawnTile('docker')
+              }
+            })
+          }
+        }
+
+        callback(links.length > 0 ? links : undefined)
+      }
+    }
+    term.registerLinkProvider(smartLinkProvider)
+
+    // ── Command navigation (Ctrl+Up / Ctrl+Down to jump between prompts) ──
+    term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      if (event.type !== 'keydown' || !event.ctrlKey) return true
+      if (event.key === 'ArrowUp') {
+        const currentLine = term.buffer.active.viewportY
+        const target = findPreviousPrompt(tileId, currentLine)
+        if (target >= 0) {
+          term.scrollToLine(target)
+        }
+        return false // prevent default
+      }
+      if (event.key === 'ArrowDown') {
+        const currentLine = term.buffer.active.viewportY
+        const target = findNextPrompt(tileId, currentLine)
+        if (target >= 0) {
+          term.scrollToLine(target)
+        }
+        return false
+      }
+      return true
+    })
 
     // Resize terminal to match tile dimensions immediately, before PTY spawn
     const initCols = tileCols(tile?.w ?? 640)
@@ -409,6 +501,7 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
         window.electronAPI.ptyKill(tileId)
         term.dispose()
         unregisterTerminal(tileId)
+        clearCommands(tileId)
       } else {
         // View switch or HMR — detach DOM but keep xterm alive
         if (xtermElement.parentNode === containerRef.current) {

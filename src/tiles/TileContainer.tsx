@@ -58,7 +58,9 @@ export function TileContainer({ tile, isSelected }: Props) {
   const exitedTileIds = useStore((s) => s.exitedTileIds)
   const viewMode = useStore((s) => s.viewMode)
   const zoom = useStore((s) => s.zoom)
+  const drag = useStore((s) => s.drag)
   const { focusTile, removeTile, renameTile, spawnTile, startLinking } = useStore()
+  const isResizing = drag?.tileId === tile.id && drag?.kind === 'resize'
   const isFocused = focusedId === tile.id
   const isExited = exitedTileIds.includes(tile.id)
 
@@ -289,6 +291,20 @@ export function TileContainer({ tile, isSelected }: Props) {
             <path d="M14 14L8 14M14 14L14 8M14 14L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </div>
+
+        {/* Resize overlay — shows terminal grid dimensions */}
+        {isResizing && (
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
+          >
+            <div
+              className="px-3 py-1.5 rounded-lg text-sm font-mono font-bold shadow-lg"
+              style={{ background: 'rgba(0,0,0,0.7)', color: '#fff' }}
+            >
+              {tile.w} × {tile.h}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Context menu */}

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, Menu, dialog, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, Menu, dialog, nativeImage, globalShortcut, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { PtyManager } from './pty'
@@ -12,6 +12,7 @@ import { completePath, completeGit } from './completions'
 import { getCommandCompletions, getCommandGhostSuggestion } from './commandCompletions'
 import { readDirectory, readFileContent, getHomeDir } from './filesystem'
 import { autoUpdater } from 'electron-updater'
+import { loadConfig, getConfig, saveConfig, startConfigWatcher, stopConfigWatcher } from './configWatcher'
 
 let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager()
@@ -546,6 +547,36 @@ ipcMain.handle('k8s:deploymentLogs', async (_event, namespace: string, deploymen
   } catch (err) { return { ok: false, error: (err as Error).message } }
 })
 
+// ─── Quick Terminal IPC ───────────────────────────────────────────────────────
+
+ipcMain.handle('quickTerminal:toggle', () => {
+  if (!mainWindow) return
+  const display = screen.getPrimaryDisplay()
+  const { width, height } = display.workAreaSize
+
+  const isQuickMode = mainWindow.getBounds().height < height * 0.6
+  if (isQuickMode) {
+    // Restore to normal
+    const appState = workspaceManager.getAppState()
+    const bounds = appState.windowBounds
+    if (bounds) mainWindow.setBounds(bounds)
+    else mainWindow.setBounds({ x: 100, y: 100, width: 1400, height: 900 })
+  } else {
+    // Enter quick mode — top half of screen
+    mainWindow.setBounds({ x: 0, y: 0, width, height: Math.round(height * 0.5) })
+  }
+})
+
+// ─── Config IPC handlers ─────────────────────────────────────────────────────
+
+ipcMain.handle('config:load', () => {
+  return getConfig()
+})
+
+ipcMain.handle('config:save', (_event, partial: Record<string, unknown>) => {
+  saveConfig(partial)
+})
+
 // ─── Platform info ────────────────────────────────────────────────────────────
 
 // ─── Auto-updater IPC ────────────────────────────────────────────────────────
@@ -576,6 +607,9 @@ app.setName('SunnyTerm')
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.sunnyterm')
 
+  // Load config from file
+  loadConfig()
+
   // Set dock icon on macOS
   if (isMac) {
     try {
@@ -597,6 +631,23 @@ app.whenReady().then(() => {
 
   createWindow()
   createMenu()
+
+  // ── Quick Terminal global hotkey ────────────────────────────────────────────
+  const QUICK_HOTKEY = 'CommandOrControl+`'
+  globalShortcut.register(QUICK_HOTKEY, () => {
+    if (!mainWindow) return
+    if (mainWindow.isVisible() && mainWindow.isFocused()) {
+      mainWindow.hide()
+    } else {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+
+  // ── Config file watcher ─────────────────────────────────────────────────────
+  if (mainWindow) {
+    startConfigWatcher(mainWindow)
+  }
 
   // Start MCP server for Claude Code integration
   startMcpServer(() => mainWindow, ptyManager)
@@ -638,6 +689,11 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
+  stopConfigWatcher()
 })
 
 app.on('window-all-closed', () => {
