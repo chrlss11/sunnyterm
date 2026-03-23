@@ -11,7 +11,8 @@ import { HistoryManager } from './history'
 import { completePath, completeGit } from './completions'
 import { getCommandCompletions, getCommandGhostSuggestion } from './commandCompletions'
 import { readDirectory, readFileContent, getHomeDir } from './filesystem'
-import { autoUpdater } from 'electron-updater'
+import pkg from 'electron-updater'
+const { autoUpdater } = pkg
 import { loadConfig, getConfig, saveConfig, startConfigWatcher, stopConfigWatcher } from './configWatcher'
 
 let mainWindow: BrowserWindow | null = null
