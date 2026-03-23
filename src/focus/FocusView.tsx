@@ -8,6 +8,7 @@ import { FileViewerTile } from '../tiles/FileViewerTile'
 import { LensTile } from '../tiles/LensTile'
 import { DockerTile } from '../tiles/DockerTile'
 import { ChartTile } from '../tiles/ChartTile'
+import { InspectorTile } from '../tiles/InspectorTile'
 import { MoreHorizontal, Pencil, Copy, RotateCcw, ClipboardCopy, Link, X } from 'lucide-react'
 import { TileKindIcon } from '../tiles/TileKindIcon'
 import type { Tile, TileKind } from '../types'
@@ -233,6 +234,7 @@ export function FocusView() {
                 { kind: 'lens' as TileKind, label: 'Lens (Filter)' },
                 { kind: 'docker' as TileKind, label: 'Docker' },
                 { kind: 'chart' as TileKind, label: 'Chart' },
+                { kind: 'inspector' as TileKind, label: 'Inspector' },
               ]).map(({ kind, label }) => (
                 <div
                   key={kind}
@@ -497,6 +499,7 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
           {tile.kind === 'lens' && <LensTile tileId={tile.id} overrideW={cardW} overrideH={contentH} />}
           {tile.kind === 'docker' && <DockerTile tileId={tile.id} />}
           {tile.kind === 'chart' && <ChartTile tileId={tile.id} />}
+          {tile.kind === 'inspector' && <InspectorTile tileId={tile.id} />}
         </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { FileViewerTile, resetFileViewerState } from './FileViewerTile'
 import { LensTile } from './LensTile'
 import { DockerTile } from './DockerTile'
 import { ChartTile } from './ChartTile'
+import { InspectorTile } from './InspectorTile'
 import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal, Terminal, BarChart3 } from 'lucide-react'
 import { getTerminalEntry } from '../lib/terminalRegistry'
 import type { ShellInfo } from '../types'
@@ -274,6 +275,7 @@ export function TileContainer({ tile, isSelected }: Props) {
               {tile.kind === 'lens' && <LensTile tileId={tile.id} />}
               {tile.kind === 'docker' && <DockerTile tileId={tile.id} />}
               {tile.kind === 'chart' && <ChartTile tileId={tile.id} />}
+              {tile.kind === 'inspector' && <InspectorTile tileId={tile.id} />}
             </TileErrorBoundary>
           )}
           {showContent && semanticMode !== 'full' && (

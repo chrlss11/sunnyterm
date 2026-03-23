@@ -170,11 +170,12 @@ function AppInner() {
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
 function Toolbar() {
-  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, toggleDark, zoomIn, zoomOut, setViewMode, toggleAutoGrid } = useStore()
+  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, toggleDark, zoomIn, zoomOut, setViewMode, toggleAutoGrid, toggleKanbanMode } = useStore()
   const undoStack = useStore((s) => s.undoStack)
   const redoStack = useStore((s) => s.redoStack)
   const showMinimap = useStore((s) => s.showMinimap)
   const autoGrid = useStore((s) => s.autoGrid)
+  const kanbanMode = useStore((s) => s.kanbanMode)
   const theme = useStore((s) => s.theme)
   const zoom = useStore((s) => s.zoom)
   const viewMode = useStore((s) => s.viewMode)
@@ -261,6 +262,13 @@ function Toolbar() {
               title="Auto-Grid (tiles auto-arrange, no overlap)"
             >
               <LayoutGrid size={ico} />
+            </button>
+            <button
+              className={`${btn} ${kanbanMode ? 'text-green-400' : ''}`}
+              onClick={toggleKanbanMode}
+              title="Kanban Mode (sections as columns)"
+            >
+              <Columns3 size={ico} />
             </button>
             <button className={btn} onClick={toggleSearch} title={`Search (${mod}F)`}>
               <Search size={ico} />
