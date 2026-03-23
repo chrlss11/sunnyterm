@@ -192,6 +192,9 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
 
       let items: CompletionItem[] = []
 
+      // 1. Try command/subcommand/flag completions first
+      const cmdItems = await window.electronAPI.completeCommand(tokens) as CompletionItem[]
+
       if (needsBranch && tokens.length >= 3) {
         // Git branch/tag completion
         const partial = tokens[tokens.length - 1] || ''
@@ -203,21 +206,43 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
       } else if (isGitCmd && gitSub === 'remote' && tokens.length >= 3) {
         const partial = tokens[tokens.length - 1] || ''
         items = await window.electronAPI.completeGit(tileId, 'remote', partial) as CompletionItem[]
+      } else if (cmdItems.length > 0) {
+        // Use command database completions
+        items = cmdItems
+      } else if (lastToken.startsWith('-')) {
+        // Flag typed but no command match — skip path completion
+        items = []
       } else {
         // Path completion for the last token
         items = await window.electronAPI.completePath(tileId, lastToken) as CompletionItem[]
       }
 
-      if (items.length === 1) {
-        // Single match: insert directly
+      // Mix in history-based suggestions for single-token input
+      if (tokens.length === 1 && lastToken) {
+        const historyMatch = findMatch(lastToken)
+        if (historyMatch) {
+          const alreadyPresent = items.some((it) => it.value === historyMatch)
+          if (!alreadyPresent) {
+            items.unshift({
+              value: historyMatch,
+              label: historyMatch,
+              kind: 'command' as CompletionItem['kind'],
+              description: 'From history'
+            })
+          }
+        }
+      }
+
+      if (items.length === 1 && items[0].kind !== 'command' && items[0].kind !== 'subcommand' && items[0].kind !== 'flag') {
+        // Single match for path/branch: insert directly
         const completed = items[0].value
         const suffix = completed.slice(lastToken.split('/').pop()?.length || 0)
         if (suffix) {
           interceptor.insertCompletion(suffix)
         }
         setCompletionItems([])
-      } else if (items.length > 1) {
-        // Multiple matches: show dropdown
+      } else if (items.length > 0) {
+        // Multiple matches or command completions: show dropdown
         // Calculate pixel position from cursor
         const core = (term as any)._core
         const dims = core?._renderService?.dimensions?.css?.cell
@@ -239,11 +264,58 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
 
     // ── Input interceptor ─────────────────────────────────────────────────
     initHistory()
+
+    // Ghost suggestion: check history first, then command database
+    const getSuggestion = (prefix: string): string | null => {
+      // History takes priority
+      const historyMatch = findMatch(prefix)
+      if (historyMatch) return historyMatch
+      return null
+    }
+
+    // Async ghost text: also query command database for suggestions
+    const renderGhostTextAsync = async (prefix: string) => {
+      if (!prefix) {
+        ghostRenderer.setGhostText(null)
+        return
+      }
+      // First try history (sync)
+      const historyMatch = findMatch(prefix)
+      if (historyMatch) {
+        const suffix = historyMatch.slice(prefix.length)
+        if (suffix) {
+          ghostRenderer.setGhostText(suffix)
+          return
+        }
+      }
+      // Then try command database (async)
+      try {
+        const cmdSuffix = await window.electronAPI.completeCommandGhost(prefix)
+        if (cmdSuffix) {
+          ghostRenderer.setGhostText(cmdSuffix)
+          return
+        }
+      } catch { /* ignore */ }
+      ghostRenderer.setGhostText(null)
+    }
+
     const interceptor = new InputInterceptor(term, {
       ptyWrite: (data) => window.electronAPI.ptyWrite(tileId, data),
       onCommandExecuted: (cmd) => addCommand(cmd),
-      getSuggestion: () => null,
-      renderGhostText: () => {},
+      getSuggestion,
+      renderGhostText: (text) => {
+        if (text === null) {
+          ghostRenderer.setGhostText(null)
+        } else {
+          ghostRenderer.setGhostText(text)
+        }
+        // Also trigger async command ghost when text changes
+        const buf = interceptor.getBuffer()
+        if (buf && !text) {
+          // No history match — try async command suggestion
+          renderGhostTextAsync(buf)
+        }
+      },
       requestCompletions,
       dismissCompletions: () => setCompletionItems([])
     })
@@ -431,15 +503,22 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
   const handleCompletionSelect = useCallback((item: CompletionItem) => {
     const interceptor = interceptorRef.current
     if (!interceptor) return
-    // Extract the last token from the buffer to determine what to insert
     const buffer = interceptor.getBuffer()
     const tokens = buffer.trimEnd().split(/\s+/)
     const lastToken = tokens[tokens.length - 1] || ''
-    // For paths, only insert the part after the last /
-    const lastSlash = lastToken.lastIndexOf('/')
-    const prefix = lastSlash >= 0 ? lastToken.slice(lastSlash + 1) : lastToken
-    const suffix = item.value.slice(prefix.length)
-    if (suffix) interceptor.insertCompletion(suffix)
+
+    if (item.kind === 'command' || item.kind === 'subcommand' || item.kind === 'flag') {
+      // For commands/subcommands/flags, compute suffix from the partial token
+      // e.g. user typed "com" and selected "commit" → suffix is "mit "
+      const suffix = item.value.slice(lastToken.length) + ' '
+      if (suffix.trim() || suffix === ' ') interceptor.insertCompletion(suffix)
+    } else {
+      // For paths/branches, only insert the part after the last /
+      const lastSlash = lastToken.lastIndexOf('/')
+      const prefix = lastSlash >= 0 ? lastToken.slice(lastSlash + 1) : lastToken
+      const suffix = item.value.slice(prefix.length)
+      if (suffix) interceptor.insertCompletion(suffix)
+    }
     setCompletionItems([])
   }, [])
 

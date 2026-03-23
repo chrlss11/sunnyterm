@@ -148,6 +148,8 @@ export interface ElectronAPI {
   // Completions
   completePath: (tileId: string, partial: string) => Promise<CompletionItemResult[]>
   completeGit: (tileId: string, type: 'branch' | 'remote' | 'tag', partial: string) => Promise<CompletionItemResult[]>
+  completeCommand: (tokens: string[]) => Promise<CompletionItemResult[]>
+  completeCommandGhost: (buffer: string) => Promise<string | null>
 
   // Filesystem
   fsReadDir: (dirPath: string) => Promise<FsEntry[]>
@@ -203,7 +205,8 @@ export interface ShellInfo {
 export interface CompletionItemResult {
   value: string
   label: string
-  kind: 'file' | 'directory' | 'branch' | 'remote' | 'tag'
+  kind: 'file' | 'directory' | 'branch' | 'remote' | 'tag' | 'command' | 'subcommand' | 'flag'
+  description?: string
 }
 
 // ─── Filesystem types ────────────────────────────────────────────────────────

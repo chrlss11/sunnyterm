@@ -9,6 +9,7 @@ import type { WorkspaceLayout, PersistedAppState } from './workspace'
 import { Client as PgClient } from 'pg'
 import { HistoryManager } from './history'
 import { completePath, completeGit } from './completions'
+import { getCommandCompletions, getCommandGhostSuggestion } from './commandCompletions'
 import { readDirectory, readFileContent, getHomeDir } from './filesystem'
 import { autoUpdater } from 'electron-updater'
 
@@ -391,6 +392,14 @@ ipcMain.handle('completion:path', async (_event, tileId: string, partial: string
 ipcMain.handle('completion:git', async (_event, tileId: string, type: 'branch' | 'remote' | 'tag', partial: string) => {
   const cwd = ptyManager.getCwd(tileId) || process.env.HOME || '/'
   return completeGit(cwd, type, partial)
+})
+
+ipcMain.handle('completion:command', async (_event, tokens: string[]) => {
+  return getCommandCompletions(tokens)
+})
+
+ipcMain.handle('completion:commandGhost', async (_event, buffer: string) => {
+  return getCommandGhostSuggestion(buffer)
 })
 
 // ─── Filesystem IPC handlers ─────────────────────────────────────────────────

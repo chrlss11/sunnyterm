@@ -107,6 +107,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   completeGit: (tileId: string, type: 'branch' | 'remote' | 'tag', partial: string) =>
     ipcRenderer.invoke('completion:git', tileId, type, partial),
 
+  completeCommand: (tokens: string[]) =>
+    ipcRenderer.invoke('completion:command', tokens),
+
+  completeCommandGhost: (buffer: string) =>
+    ipcRenderer.invoke('completion:commandGhost', buffer),
+
   // Filesystem operations
   fsReadDir: (dirPath: string) =>
     ipcRenderer.invoke('fs:readDir', dirPath),
