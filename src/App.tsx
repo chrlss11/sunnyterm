@@ -9,6 +9,7 @@ import { Terminal, Globe, Database, Compass, FolderOpen, Undo2, Redo2, Map, Sear
 import { ShellPicker } from './tiles/ShellPicker'
 import { THEMES, THEME_ORDER, applyThemeCss, type ThemeName } from './lib/themes'
 import { initMcpBridge } from './lib/mcpBridge'
+import { UpdateNotification } from './lib/UpdateNotification'
 import { useResonance } from './lib/resonance'
 import type { ViewMode } from './types'
 import { Toaster } from 'sonner'
@@ -134,6 +135,9 @@ function AppInner() {
           </div>
         )}
       </div>
+
+      {/* Auto-update notification */}
+      <UpdateNotification />
 
       {/* Resonance bar */}
       <ResonanceBar />
@@ -282,8 +286,11 @@ function Toolbar() {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* View mode toggle — hidden when toolbar is expanded */}
-      {!expanded && <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />}
+      {/* View mode toggle — always visible */}
+      <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+
+      {/* Windows title bar buttons spacer */}
+      {!isMac && <div style={{ width: 140 }} />}
     </div>
   )
 }

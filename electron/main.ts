@@ -10,6 +10,7 @@ import { Client as PgClient } from 'pg'
 import { HistoryManager } from './history'
 import { completePath, completeGit } from './completions'
 import { readDirectory, readFileContent, getHomeDir } from './filesystem'
+import { autoUpdater } from 'electron-updater'
 
 let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager()
@@ -460,6 +461,101 @@ ipcMain.handle('docker:logs', async (_event, containerId: string) => {
   }
 })
 
+// ─── Kubernetes IPC handlers ──────────────────────────────────────────────────
+
+ipcMain.handle('k8s:contexts', async () => {
+  try {
+    const { execSync } = require('child_process')
+    const output = execSync('kubectl config get-contexts -o name', { timeout: 5000 }).toString()
+    return { ok: true, contexts: output.trim().split('\n').filter(Boolean) }
+  } catch (err) { return { ok: false, error: (err as Error).message } }
+})
+
+ipcMain.handle('k8s:currentContext', async () => {
+  try {
+    const { execSync } = require('child_process')
+    const output = execSync('kubectl config current-context', { timeout: 5000 }).toString()
+    return { ok: true, context: output.trim() }
+  } catch (err) { return { ok: false, error: (err as Error).message } }
+})
+
+ipcMain.handle('k8s:namespaces', async () => {
+  try {
+    const { execSync } = require('child_process')
+    const output = execSync('kubectl get namespaces -o jsonpath="{.items[*].metadata.name}"', { timeout: 5000 }).toString()
+    return { ok: true, namespaces: output.trim().split(/\s+/).filter(Boolean) }
+  } catch (err) { return { ok: false, error: (err as Error).message } }
+})
+
+ipcMain.handle('k8s:deployments', async (_event, namespace: string) => {
+  try {
+    const { execSync } = require('child_process')
+    const output = execSync(`kubectl get deployments -n ${namespace} -o json`, { timeout: 10000 }).toString()
+    const data = JSON.parse(output)
+    return { ok: true, deployments: data.items.map((d: any) => ({
+      name: d.metadata.name,
+      replicas: d.status?.replicas ?? 0,
+      ready: d.status?.readyReplicas ?? 0,
+      available: d.status?.availableReplicas ?? 0,
+      image: d.spec?.template?.spec?.containers?.[0]?.image ?? '',
+      labels: d.spec?.selector?.matchLabels ?? {},
+    }))}
+  } catch (err) { return { ok: false, error: (err as Error).message } }
+})
+
+ipcMain.handle('k8s:pods', async (_event, namespace: string, labelSelector?: string) => {
+  try {
+    const { execSync } = require('child_process')
+    const selectorFlag = labelSelector ? ` -l ${labelSelector}` : ''
+    const output = execSync(`kubectl get pods -n ${namespace}${selectorFlag} -o json`, { timeout: 10000 }).toString()
+    const data = JSON.parse(output)
+    return { ok: true, pods: data.items.map((p: any) => ({
+      name: p.metadata.name,
+      status: p.status?.phase ?? 'Unknown',
+      ready: `${p.status?.containerStatuses?.filter((c: any) => c.ready).length ?? 0}/${p.spec?.containers?.length ?? 0}`,
+      restarts: p.status?.containerStatuses?.reduce((sum: number, c: any) => sum + (c.restartCount ?? 0), 0) ?? 0,
+      age: p.metadata?.creationTimestamp ?? '',
+      labels: p.metadata?.labels ?? {},
+      nodeName: p.spec?.nodeName ?? '',
+    }))}
+  } catch (err) { return { ok: false, error: (err as Error).message } }
+})
+
+ipcMain.handle('k8s:logs', async (_event, namespace: string, podName: string, lines?: number) => {
+  try {
+    const { execSync } = require('child_process')
+    const output = execSync(`kubectl logs ${podName} -n ${namespace} --tail=${lines ?? 100}`, { timeout: 10000 }).toString()
+    return { ok: true, logs: output }
+  } catch (err) { return { ok: false, error: (err as Error).message } }
+})
+
+ipcMain.handle('k8s:deploymentLogs', async (_event, namespace: string, deploymentName: string, lines?: number) => {
+  try {
+    const { execSync } = require('child_process')
+    const output = execSync(`kubectl logs deployment/${deploymentName} -n ${namespace} --tail=${lines ?? 100} --all-containers`, { timeout: 15000 }).toString()
+    return { ok: true, logs: output }
+  } catch (err) { return { ok: false, error: (err as Error).message } }
+})
+
+// ─── Platform info ────────────────────────────────────────────────────────────
+
+// ─── Auto-updater IPC ────────────────────────────────────────────────────────
+
+ipcMain.handle('updater:download', () => {
+  autoUpdater.downloadUpdate().catch(() => {})
+})
+
+ipcMain.handle('updater:install', () => {
+  autoUpdater.quitAndInstall(false, true)
+})
+
+ipcMain.handle('updater:check', async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates()
+    return result?.updateInfo?.version ?? null
+  } catch { return null }
+})
+
 // ─── Platform info ────────────────────────────────────────────────────────────
 
 ipcMain.handle('platform', () => process.platform)
@@ -495,6 +591,40 @@ app.whenReady().then(() => {
 
   // Start MCP server for Claude Code integration
   startMcpServer(() => mainWindow, ptyManager)
+
+  // ── Auto-updater ───────────────────────────────────────────────────────────
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('update-available', (info) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('updater:available', {
+      version: info.version,
+      releaseNotes: info.releaseNotes,
+    })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('updater:progress', {
+      percent: Math.round(progress.percent),
+      transferred: progress.transferred,
+      total: progress.total,
+    })
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('updater:ready')
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.error('[Updater] Error:', err.message)
+  })
+
+  // Check for updates after 5 seconds, then every 30 minutes
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000)
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 30 * 60 * 1000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

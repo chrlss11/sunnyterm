@@ -141,6 +141,56 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dockerLogs: (containerId: string) =>
     ipcRenderer.invoke('docker:logs', containerId),
 
+  // Kubernetes operations
+  k8sContexts: () =>
+    ipcRenderer.invoke('k8s:contexts'),
+
+  k8sCurrentContext: () =>
+    ipcRenderer.invoke('k8s:currentContext'),
+
+  k8sNamespaces: () =>
+    ipcRenderer.invoke('k8s:namespaces'),
+
+  k8sDeployments: (namespace: string) =>
+    ipcRenderer.invoke('k8s:deployments', namespace),
+
+  k8sPods: (namespace: string, labelSelector?: string) =>
+    ipcRenderer.invoke('k8s:pods', namespace, labelSelector),
+
+  k8sLogs: (namespace: string, podName: string, lines?: number) =>
+    ipcRenderer.invoke('k8s:logs', namespace, podName, lines),
+
+  k8sDeploymentLogs: (namespace: string, deploymentName: string, lines?: number) =>
+    ipcRenderer.invoke('k8s:deploymentLogs', namespace, deploymentName, lines),
+
+  // Auto-updater
+  updaterDownload: () =>
+    ipcRenderer.invoke('updater:download'),
+
+  updaterInstall: () =>
+    ipcRenderer.invoke('updater:install'),
+
+  updaterCheck: () =>
+    ipcRenderer.invoke('updater:check'),
+
+  onUpdaterAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, info: any) => callback(info)
+    ipcRenderer.on('updater:available', handler)
+    return () => ipcRenderer.removeListener('updater:available', handler)
+  },
+
+  onUpdaterProgress: (callback: (progress: { percent: number }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: any) => callback(progress)
+    ipcRenderer.on('updater:progress', handler)
+    return () => ipcRenderer.removeListener('updater:progress', handler)
+  },
+
+  onUpdaterReady: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('updater:ready', handler)
+    return () => ipcRenderer.removeListener('updater:ready', handler)
+  },
+
   // MCP Bridge — listen for IPC from main process MCP server
   onMcpMessage: (channel: string, callback: (...args: any[]) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, ...args: any[]) => callback(...args)

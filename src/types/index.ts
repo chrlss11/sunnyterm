@@ -167,6 +167,23 @@ export interface ElectronAPI {
   dockerList: () => Promise<{ ok: boolean; containers?: any[]; error?: string }>
   dockerLogs: (containerId: string) => Promise<{ ok: boolean; logs?: string; error?: string }>
 
+  // Kubernetes
+  k8sContexts: () => Promise<K8sContextsResult>
+  k8sCurrentContext: () => Promise<K8sCurrentContextResult>
+  k8sNamespaces: () => Promise<K8sNamespacesResult>
+  k8sDeployments: (namespace: string) => Promise<K8sDeploymentsResult>
+  k8sPods: (namespace: string, labelSelector?: string) => Promise<K8sPodsResult>
+  k8sLogs: (namespace: string, podName: string, lines?: number) => Promise<K8sLogsResult>
+  k8sDeploymentLogs: (namespace: string, deploymentName: string, lines?: number) => Promise<K8sLogsResult>
+
+  // Auto-updater
+  updaterDownload: () => Promise<void>
+  updaterInstall: () => Promise<void>
+  updaterCheck: () => Promise<string | null>
+  onUpdaterAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void) => () => void
+  onUpdaterProgress: (callback: (progress: { percent: number }) => void) => () => void
+  onUpdaterReady: (callback: () => void) => () => void
+
   // MCP Bridge
   onMcpMessage: (channel: string, callback: (...args: any[]) => void) => () => void
   mcpRespond: (channel: string, data: unknown) => void
@@ -237,6 +254,63 @@ export interface PgQueryResult {
   rows?: Record<string, unknown>[]
   rowCount?: number | null
   elapsed?: number
+  error?: string
+}
+
+// ─── Kubernetes types ─────────────────────────────────────────────────────────
+
+export interface K8sContextsResult {
+  ok: boolean
+  contexts?: string[]
+  error?: string
+}
+
+export interface K8sCurrentContextResult {
+  ok: boolean
+  context?: string
+  error?: string
+}
+
+export interface K8sNamespacesResult {
+  ok: boolean
+  namespaces?: string[]
+  error?: string
+}
+
+export interface K8sDeployment {
+  name: string
+  replicas: number
+  ready: number
+  available: number
+  image: string
+  labels: Record<string, string>
+}
+
+export interface K8sDeploymentsResult {
+  ok: boolean
+  deployments?: K8sDeployment[]
+  error?: string
+}
+
+export interface K8sPod {
+  name: string
+  status: string
+  ready: string
+  restarts: number
+  age: string
+  labels: Record<string, string>
+  nodeName: string
+}
+
+export interface K8sPodsResult {
+  ok: boolean
+  pods?: K8sPod[]
+  error?: string
+}
+
+export interface K8sLogsResult {
+  ok: boolean
+  logs?: string
   error?: string
 }
 

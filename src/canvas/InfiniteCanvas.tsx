@@ -8,7 +8,7 @@ import { TrailOverlay } from './TrailOverlay'
 import { TrailControls } from './TrailControls'
 import { CommandPalette, TargetingOverlay, type SpatialAction } from './CommandPalette'
 import { AlignStartVertical, AlignEndVertical, AlignStartHorizontal, AlignEndHorizontal, AlignCenterVertical, AlignCenterHorizontal, Rows3, Columns3, LayoutGrid, Terminal, Globe, Database, Compass, FolderOpen } from 'lucide-react'
-import type { DragState, Tile } from '../types'
+import type { DragState, Tile, TileKind } from '../types'
 
 const RESIZE_HANDLE = 32
 const ZOOM_MIN = 0.5
@@ -116,7 +116,7 @@ export function InfiniteCanvas() {
     setTargetingAction(null)
   }, [targetingAction, spawnTile])
 
-  // ── Keyboard (Space for pan, Cmd+K for palette) ────────────────────────────
+  // ── Keyboard (Space/Ctrl for pan, Cmd+K for palette) ────────────────────────
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -126,13 +126,14 @@ export function InfiniteCanvas() {
         setShowPalette(true)
         return
       }
-      if (e.code === 'Space' && e.target === document.body) {
+      // Space OR Ctrl to enter pan mode (like Figma)
+      if ((e.code === 'Space' && e.target === document.body) || e.code === 'ControlLeft' || e.code === 'ControlRight') {
         spaceHeld.current = true
         if (containerRef.current) containerRef.current.style.cursor = 'grab'
       }
     }
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
+      if (e.code === 'Space' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
         spaceHeld.current = false
         if (containerRef.current) containerRef.current.style.cursor = 'default'
       }
@@ -301,17 +302,7 @@ export function InfiniteCanvas() {
       if (isLassoing.current) {
         isLassoing.current = false
         setLasso(null)
-
-        // If the user didn't drag (click on empty canvas), open the create menu
-        const start = clickStart.current
         clickStart.current = null
-        if (start) {
-          const dx = Math.abs(e.clientX - start.x)
-          const dy = Math.abs(e.clientY - start.y)
-          if (dx < 4 && dy < 4) {
-            setCreateMenu({ x: e.clientX, y: e.clientY, canvasX: start.canvasX, canvasY: start.canvasY })
-          }
-        }
       }
       endDrag()
     },
@@ -361,10 +352,20 @@ export function InfiniteCanvas() {
       }
 
       if (selectedIds.length >= 2) {
+        // Show align menu when tiles are selected
         setAlignMenu({ x: e.clientX, y: e.clientY })
+      } else {
+        // Show create menu on right-click on empty canvas
+        const canvas = toCanvas(e.clientX, e.clientY)
+        // Check if clicking on a tile — if so, let tile context menu handle it
+        const sorted = [...tiles].sort((a, b) => b.zIndex - a.zIndex)
+        const hit = sorted.find((t) => hitTest(canvas.x, canvas.y, t).inTile)
+        if (!hit) {
+          setCreateMenu({ x: e.clientX, y: e.clientY, canvasX: canvas.x, canvasY: canvas.y })
+        }
       }
     },
-    [linkingFromId, cancelLinking, selectedIds]
+    [linkingFromId, cancelLinking, selectedIds, tiles, toCanvas]
   )
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -600,8 +601,19 @@ function CreateMenu({ x, y, canvasX, canvasY, containerRef, onClose }: {
   const item = 'flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors'
   const ico = 13
 
-  const spawn = (kind: 'terminal' | 'http' | 'postgres' | 'browser' | 'file') => {
+  const { alignTiles, tiles: allTiles } = useStore()
+
+  const spawn = (kind: TileKind) => {
     spawnTile(kind, canvasX - 320, canvasY - 200)
+    onClose()
+  }
+
+  const handleArrangeGrid = () => {
+    // Select all tiles then align as grid
+    const allIds = allTiles.map((t) => t.id)
+    useStore.getState().setSelectedIds(allIds)
+    alignTiles('grid')
+    useStore.getState().clearSelection()
     onClose()
   }
 
@@ -609,7 +621,7 @@ function CreateMenu({ x, y, canvasX, canvasY, containerRef, onClose }: {
     <div
       ref={ref}
       style={{ position: 'absolute', left: menuX, top: menuY, zIndex: 99999 }}
-      className="w-40 rounded-lg border border-border bg-tile shadow-xl py-1"
+      className="w-44 rounded-lg border border-border bg-tile shadow-xl py-1"
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
@@ -619,6 +631,12 @@ function CreateMenu({ x, y, canvasX, canvasY, containerRef, onClose }: {
       <div className={item} onClick={() => spawn('postgres')}><Database size={ico} /> PostgreSQL</div>
       <div className={item} onClick={() => spawn('browser')}><Compass size={ico} /> Browser</div>
       <div className={item} onClick={() => spawn('file')}><FolderOpen size={ico} /> File Viewer</div>
+      {allTiles.length > 1 && (
+        <>
+          <div className="my-0.5 border-t border-border" />
+          <div className={item} onClick={handleArrangeGrid}><LayoutGrid size={ico} /> Arrange in Grid</div>
+        </>
+      )}
     </div>
   )
 }

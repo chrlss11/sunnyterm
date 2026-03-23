@@ -28,6 +28,11 @@
   "build": {
     "appId": "com.sunnyterm.app",
     "productName": "SunnyTerm",
+    "publish": {
+      "provider": "github",
+      "owner": "chrlss11",
+      "repo": "sunnyterm"
+    },
     "directories": {
       "output": "release"
     },
@@ -144,6 +149,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.3",
     "node-pty": "^1.1.0",
     "pg": "^8.20.0",
     "shiki": "^4.0.2",
