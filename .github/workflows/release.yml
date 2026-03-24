@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Package (${{ matrix.arch }})
+        run: npx electron-builder --mac --${{ matrix.arch }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rename DMG
+        run: |
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            mv release/*.dmg release/SunnyTerm-arm64.dmg
+          else
+            mv release/*.dmg release/SunnyTerm-x64.dmg
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dmg-${{ matrix.arch }}
+          path: release/SunnyTerm-*.dmg
+
+  release:
+    needs: build-mac
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SunnyTerm ${{ github.ref_name }}
+          generate_release_notes: true
+          files: artifacts/*.dmg
