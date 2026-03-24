@@ -123,7 +123,7 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     const term = new Terminal({
       theme: currentTheme.terminal,
       fontFamily: '"Google Sans Mono", Menlo, Monaco, monospace',
-      fontSize: 13,
+      fontSize: tile?.fontSize ?? 13,
       lineHeight: 1.0,
       cursorBlink: true,
       cursorStyle: 'block',
@@ -365,6 +365,16 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     }
   }, [theme])
 
+  // ── Sync per-tile font size ─────────────────────────────────────────────
+  useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    const fs = tile?.fontSize ?? 13
+    if (term.options.fontSize !== fs) {
+      term.options.fontSize = fs
+    }
+  }, [tile?.fontSize])
+
   // ── Fit terminal to tile dimensions ──────────────────────────────────────
   // Uses tile.w/tile.h directly instead of DOM measurements to avoid
   // issues with CSS transforms (zoom) and mount animations (scale 0.97→1)
@@ -402,7 +412,7 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     const t3 = setTimeout(doFit, 200)
 
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
-  }, [tile?.w, tile?.h, overrideW, overrideH, zoom, tileId, instanceKey])
+  }, [tile?.w, tile?.h, tile?.fontSize, overrideW, overrideH, zoom, tileId, instanceKey])
 
   const handleRestart = () => {
     setExitInfo(null)
@@ -430,8 +440,46 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     // Forward tab to shell as fallback
   }, [])
 
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const term = termRef.current
+    if (!term) return
+
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) return
+
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        // Display image inline using iTerm2 inline image protocol
+        const reader = new FileReader()
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1]
+          // iTerm2 inline image: ESC ] 1337 ; File=inline=1;size=N;name=NAME:BASE64 ST
+          const name = btoa(file.name)
+          const seq = `\x1b]1337;File=inline=1;size=${file.size};name=${name}:${base64}\x07`
+          term.write(seq)
+          term.write('\r\n')
+        }
+        reader.readAsDataURL(file)
+      } else {
+        // For non-image files, type the file path into the terminal
+        const path = (file as any).path
+        if (path) {
+          window.electronAPI.ptyWrite(tileId, path.includes(' ') ? `"${path}"` : path)
+        }
+      }
+    }
+  }, [tileId])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'copy'
+  }, [])
+
   return (
-    <div className="w-full h-full relative">
+    <div className="w-full h-full relative" onDrop={handleDrop} onDragOver={handleDragOver}>
       <div ref={containerRef} className="w-full h-full" />
 
       {completionItems.length > 0 && (

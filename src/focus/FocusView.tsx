@@ -5,7 +5,7 @@ import { HttpTile } from '../tiles/HttpTile'
 import { PostgresTile } from '../tiles/PostgresTile'
 import { BrowserTile } from '../tiles/BrowserTile'
 import { FileViewerTile } from '../tiles/FileViewerTile'
-import { MoreHorizontal, Pencil, Copy, RotateCcw, ClipboardCopy, Link, X } from 'lucide-react'
+import { MoreHorizontal, Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, Minus, Plus } from 'lucide-react'
 import { TileKindIcon } from '../tiles/TileKindIcon'
 import type { Tile, TileKind } from '../types'
 
@@ -18,8 +18,7 @@ function tileCreatedAt(tile: Tile): number {
   return parseInt(parts[1], 10) || 0
 }
 
-// Persistent tab order across re-renders (keyed by tile id set)
-const tabOrderCache = new Map<string, string[]>()
+import { tabOrderCache } from './tabOrderCache'
 
 export function FocusView() {
   const tiles = useStore((s) => s.tiles)
@@ -302,7 +301,7 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
   const cardRef = useRef<HTMLDivElement>(null)
   const focusedId = useStore((s) => s.focusedId)
   const exitedTileIds = useStore((s) => s.exitedTileIds)
-  const { focusTile, removeTile, renameTile, spawnTile, startLinking } = useStore()
+  const { focusTile, removeTile, renameTile, spawnTile, startLinking, setTileFontSize } = useStore()
   const isFocused = focusedId === tile.id
   const isExited = exitedTileIds.includes(tile.id)
 
@@ -443,9 +442,30 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
             <span className="text-yellow-400 text-xs" title="Output linked">⇒</span>
           )}
 
+          {/* Font size controls (terminal only) */}
+          {tile.kind === 'terminal' && (
+            <div className="flex items-center gap-0.5 ml-auto" onMouseDown={(e) => e.stopPropagation()}>
+              <button
+                className="flex items-center justify-center w-5 h-5 rounded transition-colors"
+                onClick={(e) => { e.stopPropagation(); setTileFontSize(tile.id, (tile.fontSize ?? 13) - 1) }}
+                title="Decrease font size"
+              >
+                <Minus size={10} className="text-text-muted hover:text-text-primary" />
+              </button>
+              <span className="text-[9px] text-text-muted w-4 text-center select-none">{tile.fontSize ?? 13}</span>
+              <button
+                className="flex items-center justify-center w-5 h-5 rounded transition-colors"
+                onClick={(e) => { e.stopPropagation(); setTileFontSize(tile.id, (tile.fontSize ?? 13) + 1) }}
+                title="Increase font size"
+              >
+                <Plus size={10} className="text-text-muted hover:text-text-primary" />
+              </button>
+            </div>
+          )}
+
           <button
             ref={menuBtnRef}
-            className="flex items-center justify-center transition-colors ml-auto"
+            className={`flex items-center justify-center transition-colors ${tile.kind !== 'terminal' ? 'ml-auto' : ''}`}
             onClick={(e) => {
               e.stopPropagation()
               setCtxMenuOpen((v) => !v)

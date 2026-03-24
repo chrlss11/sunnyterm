@@ -5,7 +5,7 @@ import { HttpTile } from './HttpTile'
 import { PostgresTile } from './PostgresTile'
 import { BrowserTile } from './BrowserTile'
 import { FileViewerTile, resetFileViewerState } from './FileViewerTile'
-import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal } from 'lucide-react'
+import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal, Minus, Plus } from 'lucide-react'
 import { TileKindIcon } from './TileKindIcon'
 import type { Tile } from '../types'
 
@@ -51,7 +51,7 @@ export function TileContainer({ tile, isSelected }: Props) {
   const focusedId = useStore((s) => s.focusedId)
   const exitedTileIds = useStore((s) => s.exitedTileIds)
   const viewMode = useStore((s) => s.viewMode)
-  const { focusTile, removeTile, renameTile, spawnTile, startLinking } = useStore()
+  const { focusTile, removeTile, renameTile, spawnTile, startLinking, setTileFontSize } = useStore()
   const isFocused = focusedId === tile.id
   const isExited = exitedTileIds.includes(tile.id)
 
@@ -222,10 +222,31 @@ export function TileContainer({ tile, isSelected }: Props) {
             <span className="text-yellow-400 text-xs" title="Output linked">⇒</span>
           )}
 
+          {/* Font size controls (terminal only) */}
+          {tile.kind === 'terminal' && (
+            <div className="flex items-center gap-0.5 ml-auto" onMouseDown={(e) => e.stopPropagation()}>
+              <button
+                className="flex items-center justify-center w-4 h-4 rounded transition-colors"
+                onClick={(e) => { e.stopPropagation(); setTileFontSize(tile.id, (tile.fontSize ?? 13) - 1) }}
+                title="Decrease font size"
+              >
+                <Minus size={10} className="text-text-muted hover:text-text-primary" />
+              </button>
+              <span className="text-[9px] text-text-muted w-4 text-center select-none">{tile.fontSize ?? 13}</span>
+              <button
+                className="flex items-center justify-center w-4 h-4 rounded transition-colors"
+                onClick={(e) => { e.stopPropagation(); setTileFontSize(tile.id, (tile.fontSize ?? 13) + 1) }}
+                title="Increase font size"
+              >
+                <Plus size={10} className="text-text-muted hover:text-text-primary" />
+              </button>
+            </div>
+          )}
+
           {/* Menu button */}
           <button
             ref={menuBtnRef}
-            className="flex items-center justify-center transition-colors ml-auto"
+            className={`flex items-center justify-center transition-colors ${tile.kind !== 'terminal' ? 'ml-auto' : ''}`}
             onClick={(e) => {
               e.stopPropagation()
               setCtxMenuOpen((v) => !v)

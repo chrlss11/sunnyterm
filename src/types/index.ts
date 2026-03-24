@@ -26,6 +26,7 @@ export interface Tile {
   userRenamed: boolean
   outputLink: string | null  // tile id this tile pipes output to
   zIndex: number
+  fontSize?: number     // per-tile font size (terminal only, default 13)
   initialUrl?: string  // for browser tiles: URL to load on first mount
   initialPath?: string // for file tiles: directory to open
 }

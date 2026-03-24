@@ -32,6 +32,19 @@ function AppInner() {
   const initializedRef = useRef(false)
   const mainRef = useRef<HTMLDivElement>(null)
 
+  // ── Prevent Electron from navigating on file drop ─────────────────────────
+  // Must preventDefault on both dragover and drop to stop Electron's default
+  // file-open behavior. Terminal tiles handle drops via their own React handlers.
+  useEffect(() => {
+    const prevent = (e: DragEvent) => e.preventDefault()
+    document.addEventListener('dragover', prevent)
+    document.addEventListener('drop', prevent)
+    return () => {
+      document.removeEventListener('dragover', prevent)
+      document.removeEventListener('drop', prevent)
+    }
+  }, [])
+
   // ── Reset scroll positions when returning to canvas ────────────────────────
   useEffect(() => {
     if (viewMode === 'canvas' && mainRef.current) {

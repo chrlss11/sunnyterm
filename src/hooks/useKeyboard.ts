@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from '../store'
+import { tabOrderCache } from '../focus/tabOrderCache'
 
 /**
  * Global keyboard shortcuts
@@ -223,11 +224,19 @@ export function useKeyboard() {
       e.preventDefault()
       e.stopPropagation()
 
-      const idx = tiles.findIndex((t) => t.id === fid)
+      // Use the focus-mode tab order (respects drag reordering) instead of raw tiles array
+      const tileIds = new Set(tiles.map((t) => t.id))
+      const cacheKey = [...tileIds].sort().join(',')
+      const ordered = tabOrderCache.get(cacheKey)
+      const orderedIds = ordered && ordered.length === tiles.length
+        ? ordered.filter((id) => tileIds.has(id))
+        : tiles.map((t) => t.id)
+
+      const idx = orderedIds.indexOf(fid ?? '')
       const next = e.key === 'ArrowRight'
-        ? (idx + 1) % tiles.length
-        : (idx - 1 + tiles.length) % tiles.length
-      focus(tiles[next].id)
+        ? (idx + 1) % orderedIds.length
+        : (idx - 1 + orderedIds.length) % orderedIds.length
+      focus(orderedIds[next])
     }
 
     window.addEventListener('keydown', handleCtrlTab, true) // capture phase
