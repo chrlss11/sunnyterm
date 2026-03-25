@@ -1,7 +1,7 @@
 {
   "name": "sunnyterm",
   "productName": "SunnyTerm",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Infinite canvas terminal emulator",
   "author": {
     "name": "Christian Rojas",
