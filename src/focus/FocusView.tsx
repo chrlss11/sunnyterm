@@ -287,7 +287,7 @@ export function FocusView() {
                   isActive
                     ? 'border-border text-text-primary'
                     : 'border-transparent text-text-muted hover:text-text-secondary'
-                } ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? '!border-primary/40 scale-105' : ''}`}
+                } ${isDragging ? 'opacity-30 scale-95' : ''} ${isDropTarget ? 'ring-2 ring-blue-400/60 scale-105' : ''}`}
                 onClick={() => focusTile(tile.id)}
               >
                 <TileKindIcon kind={tile.kind} active={isActive} exited={isExited} size={11} />
