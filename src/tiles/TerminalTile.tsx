@@ -13,9 +13,9 @@ import { stripAnsi } from '../lib/stripAnsi'
 import { markActivity } from '../lib/tileActivity'
 import { registerCommandParser, findPreviousPrompt, findNextPrompt, clearCommands } from '../lib/commandMarkers'
 import { InputInterceptor } from '../lib/inputInterceptor'
-import { GhostTextRenderer } from '../lib/ghostTextRenderer'
+// GhostTextRenderer removed — no inline suggestions
 import { initHistory, addCommand, findMatch } from '../lib/commandHistory'
-import { CompletionDropdown, type CompletionItem } from './CompletionDropdown'
+// CompletionDropdown removed — all input goes directly to shell
 import { TerminalShortcuts } from './TerminalShortcuts'
 import { THEMES, type ThemeName } from '../lib/themes'
 
@@ -39,9 +39,6 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
   // incrementing this forces terminal + PTY to fully reinitialise
   const [instanceKey, setInstanceKey] = useState(0)
 
-  // Autocomplete state
-  const [completionItems, setCompletionItems] = useState<CompletionItem[]>([])
-  const [completionPos, setCompletionPos] = useState({ x: 0, y: 0 })
   const interceptorRef = useRef<InputInterceptor | null>(null)
 
   const tiles = useStore((s) => s.tiles)
@@ -272,83 +269,16 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     const ghostRenderer = { setGhostText(_: string | null) {}, dispose() {} }
 
     // ── Completion helper ─────────────────────────────────────────────────
-    const requestCompletions = async (buffer: string) => {
-      // Parse the last token from the buffer for path completion
-      const tokens = buffer.trimEnd().split(/\s+/)
-      const lastToken = tokens[tokens.length - 1] || ''
-
-      // Determine completion type
-      const isGitCmd = /^git\s+/.test(buffer)
-      const gitSub = isGitCmd ? tokens[1] : null
-      const needsBranch = gitSub && ['checkout', 'switch', 'merge', 'rebase', 'branch', 'push', 'pull', 'diff', 'log'].includes(gitSub)
-
-      let items: CompletionItem[] = []
-
-      if (needsBranch && tokens.length >= 3) {
-        // Git branch/tag completion
-        const partial = tokens[tokens.length - 1] || ''
-        const [branches, tags] = await Promise.all([
-          window.electronAPI.completeGit(tileId, 'branch', partial),
-          window.electronAPI.completeGit(tileId, 'tag', partial)
-        ])
-        items = [...branches, ...tags] as CompletionItem[]
-      } else if (isGitCmd && gitSub === 'remote' && tokens.length >= 3) {
-        const partial = tokens[tokens.length - 1] || ''
-        items = await window.electronAPI.completeGit(tileId, 'remote', partial) as CompletionItem[]
-      } else {
-        // Path completion for the last token
-        items = await window.electronAPI.completePath(tileId, lastToken) as CompletionItem[]
-      }
-
-      if (items.length === 1) {
-        // Single match for path/branch: insert directly
-        const completed = items[0].value
-        const suffix = completed.slice(lastToken.split('/').pop()?.length || 0)
-        if (suffix) {
-          interceptor.insertCompletion(suffix)
-        }
-        setCompletionItems([])
-      } else if (items.length > 0) {
-        // Multiple matches or command completions: show dropdown
-        // Calculate pixel position from cursor
-        const core = (term as any)._core
-        const dims = core?._renderService?.dimensions?.css?.cell
-        const cursorX = term.buffer.active.cursorX
-        const cursorY = term.buffer.active.cursorY
-        if (dims) {
-          setCompletionPos({
-            x: cursorX * dims.width + 8, // 8px padding
-            y: (cursorY + 1) * dims.height + 6 // below cursor line, 6px padding
-          })
-        }
-        setCompletionItems(items)
-      } else {
-        // No matches: forward tab to shell
-        setCompletionItems([])
-        window.electronAPI.ptyWrite(tileId, '\t')
-      }
-    }
-
-    // ── Input interceptor ─────────────────────────────────────────────────
+    // ── Input interceptor (minimal — just tracks commands for history) ───
     initHistory()
-
-    // Ghost suggestion: check history first, then command database
-    const getSuggestion = (prefix: string): string | null => {
-      // History takes priority
-      const historyMatch = findMatch(prefix)
-      if (historyMatch) return historyMatch
-      return null
-    }
 
     const interceptor = new InputInterceptor(term, {
       ptyWrite: (data) => window.electronAPI.ptyWrite(tileId, data),
       onCommandExecuted: (cmd) => addCommand(cmd),
-      getSuggestion,
-      renderGhostText: (text) => {
-        ghostRenderer.setGhostText(text)
-      },
-      requestCompletions,
-      dismissCompletions: () => setCompletionItems([])
+      getSuggestion: () => null,
+      renderGhostText: () => {},
+      requestCompletions: () => {},
+      dismissCompletions: () => {}
     })
     interceptorRef.current = interceptor
 
@@ -545,33 +475,6 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     setInstanceKey((k) => k + 1)
   }
 
-  const handleCompletionSelect = useCallback((item: CompletionItem) => {
-    const interceptor = interceptorRef.current
-    if (!interceptor) return
-    const buffer = interceptor.getBuffer()
-    const tokens = buffer.trimEnd().split(/\s+/)
-    const lastToken = tokens[tokens.length - 1] || ''
-
-    if (item.kind === 'command' || item.kind === 'subcommand' || item.kind === 'flag') {
-      // For commands/subcommands/flags, compute suffix from the partial token
-      // e.g. user typed "com" and selected "commit" → suffix is "mit "
-      const suffix = item.value.slice(lastToken.length) + ' '
-      if (suffix.trim() || suffix === ' ') interceptor.insertCompletion(suffix)
-    } else {
-      // For paths/branches, only insert the part after the last /
-      const lastSlash = lastToken.lastIndexOf('/')
-      const prefix = lastSlash >= 0 ? lastToken.slice(lastSlash + 1) : lastToken
-      const suffix = item.value.slice(prefix.length)
-      if (suffix) interceptor.insertCompletion(suffix)
-    }
-    setCompletionItems([])
-  }, [])
-
-  const handleCompletionDismiss = useCallback(() => {
-    setCompletionItems([])
-    // Forward tab to shell as fallback
-  }, [])
-
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -613,16 +516,6 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
   return (
     <div className="w-full h-full relative" onDrop={handleDrop} onDragOver={handleDragOver}>
       <div ref={containerRef} className="w-full h-full" />
-
-      {completionItems.length > 0 && (
-        <CompletionDropdown
-          items={completionItems}
-          position={completionPos}
-          onSelect={handleCompletionSelect}
-          onDismiss={handleCompletionDismiss}
-          isDark={isDark}
-        />
-      )}
 
       {exitInfo === null && <TerminalShortcuts tileId={tileId} />}
 
