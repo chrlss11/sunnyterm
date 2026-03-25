@@ -232,6 +232,19 @@ export function useKeyboard() {
         e.stopPropagation()
         const { viewMode, setViewMode } = useStore.getState()
         setViewMode(viewMode === 'canvas' ? 'focus' : 'canvas')
+        return
+      }
+
+      // Shift+Tab in focus mode — cycle through tiles left→right, wrap around
+      if (e.key === 'Tab' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const { viewMode, tiles, focusedId: fid, focusTile: focus } = useStore.getState()
+        if (viewMode === 'focus' && tiles.length > 1) {
+          e.preventDefault()
+          e.stopPropagation()
+          const idx = tiles.findIndex((t) => t.id === fid)
+          const next = (idx + 1) % tiles.length
+          focus(tiles[next].id)
+        }
       }
     }
 
