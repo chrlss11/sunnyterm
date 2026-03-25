@@ -92,7 +92,6 @@ export class InputInterceptor {
     if (data === BACKSPACE) {
       this.buffer = this.buffer.slice(0, -1)
       this.cb.ptyWrite(data)
-      this.updateSuggestion()
       return
     }
 
@@ -118,7 +117,6 @@ export class InputInterceptor {
       const lastSpace = trimmed.lastIndexOf(' ')
       this.buffer = lastSpace === -1 ? '' : this.buffer.slice(0, lastSpace + 1)
       this.cb.ptyWrite(data)
-      this.updateSuggestion()
       return
     }
 
@@ -186,7 +184,7 @@ export class InputInterceptor {
     this.completionVisible = false
     this.buffer += data
     this.cb.ptyWrite(data)
-    this.updateSuggestion()
+    // Ghost text disabled for performance — no per-keystroke suggestion lookup
   }
 
   /** Handle output from PTY to detect raw mode transitions */
@@ -203,12 +201,10 @@ export class InputInterceptor {
 
   /** Insert a completion into the buffer and PTY */
   insertCompletion(text: string): void {
-    // text is the completed portion to insert
     this.cb.ptyWrite(text)
     this.buffer += text
     this.completionVisible = false
     this.cb.dismissCompletions()
-    this.updateSuggestion()
   }
 
   /** Get the current input buffer */

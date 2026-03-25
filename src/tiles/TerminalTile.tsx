@@ -268,8 +268,8 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
 
     markTileAlive(tileId)
 
-    // ── Ghost text renderer ──────────────────────────────────────────────
-    const ghostRenderer = new GhostTextRenderer(term, () => (THEMES[themeRef.current as ThemeName] ?? THEMES.dark).isDark)
+    // ── Ghost text disabled for performance ──────────────────────────────
+    const ghostRenderer = { setGhostText(_: string | null) {}, dispose() {} }
 
     // ── Completion helper ─────────────────────────────────────────────────
     const requestCompletions = async (buffer: string) => {
@@ -353,10 +353,13 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     interceptorRef.current = interceptor
 
     // Helper to subscribe to PTY data/exit events
+    let lastActivityMark = 0
     const subscribePty = () => {
       const cleanup = window.electronAPI.onPtyData(tileId, (data) => {
         term.write(data)
-        markActivity(tileId)
+        // Throttle activity marking to avoid per-chunk overhead
+        const now = Date.now()
+        if (now - lastActivityMark > 500) { lastActivityMark = now; markActivity(tileId) }
         interceptor.handleOutput(data) // detect raw mode
         const link = entry.outputLink
         if (link) {
