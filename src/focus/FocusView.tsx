@@ -160,6 +160,35 @@ export function FocusView() {
     return () => el.removeEventListener('wheel', handler)
   }, [])
 
+  // Update active tab when user scrolls to a different card
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || focusEntries.length === 0 || cardW === 0) return
+    const handler = () => {
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current)
+      scrollTimerRef.current = setTimeout(() => {
+        const padding = Math.round(containerW * 0.15)
+        const centerX = el.scrollLeft + containerW / 2
+        // Calculate which card index the center falls on
+        const idx = Math.round((centerX - padding - cardW / 2) / cardW)
+        const clampedIdx = Math.max(0, Math.min(focusEntries.length - 1, idx))
+        const entry = focusEntries[clampedIdx]
+        if (entry) {
+          const targetId = entry.type === 'single' ? entry.tile.id : entry.tiles[0].id
+          if (targetId !== useStore.getState().focusedId) {
+            focusTile(targetId)
+          }
+        }
+      }, 100)
+    }
+    el.addEventListener('scroll', handler, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', handler)
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current)
+    }
+  }, [focusEntries, cardW, containerW, focusTile])
+
   // Drag & drop reorder state
   const [dragTabId, setDragTabId] = useState<string | null>(null)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
@@ -226,7 +255,7 @@ export function FocusView() {
                   key={entry.id}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] shrink-0 cursor-pointer border transition-colors ${
                     isActive
-                      ? 'border-white/10 text-text-primary'
+                      ? 'border-border text-text-primary'
                       : 'border-transparent text-text-muted hover:text-text-secondary'
                   }`}
                   onClick={() => focusTile(entry.tiles[0].id)}
@@ -252,9 +281,9 @@ export function FocusView() {
                 onDragEnd={handleDragEnd}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] shrink-0 cursor-grab active:cursor-grabbing border transition-colors ${
                   isActive
-                    ? 'border-white/10 text-text-primary'
+                    ? 'border-border text-text-primary'
                     : 'border-transparent text-text-muted hover:text-text-secondary'
-                } ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? '!border-white/40 scale-105' : ''}`}
+                } ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? '!border-primary/40 scale-105' : ''}`}
                 onClick={() => focusTile(tile.id)}
               >
                 <TileKindIcon kind={tile.kind} active={isActive} exited={isExited} size={11} />
@@ -617,7 +646,7 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
               onChange={(e) => setRenameValue(e.target.value)}
               onBlur={commitRename}
               onKeyDown={handleRenameKey}
-              className="flex-1 min-w-0 bg-transparent outline-none text-xs font-medium text-white/90"
+              className="flex-1 min-w-0 bg-transparent outline-none text-xs font-medium text-text-primary"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
             />

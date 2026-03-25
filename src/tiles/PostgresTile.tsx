@@ -109,7 +109,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
   const inputCls = 'bg-black/[0.04] dark:bg-white/[0.06] border border-border rounded px-2 py-1 text-xs text-text-primary outline-none focus:border-blue-500/60 transition-colors'
 
   return (
-    <div className="flex flex-col h-full bg-surface text-white font-mono text-xs select-none">
+    <div className="flex flex-col h-full bg-surface text-text-primary font-mono text-xs select-none">
 
       {/* Connection bar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
@@ -163,7 +163,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
           <span className="text-text-muted text-[10px]">SQL</span>
           <div className="ml-auto flex items-center gap-2">
             <button
-              className={`px-2 py-0.5 rounded text-[10px] transition-colors ${showHistory ? 'bg-black/5 dark:bg-white/10 text-text-secondary' : 'text-text-muted hover:text-white/60'}`}
+              className={`px-2 py-0.5 rounded text-[10px] transition-colors ${showHistory ? 'bg-black/5 dark:bg-white/10 text-text-secondary' : 'text-text-muted hover:text-text-secondary'}`}
               onClick={() => setShowHistory((s) => !s)}
             >
               ⏱ History
@@ -172,7 +172,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
               className={`px-3 py-0.5 rounded text-[10px] font-medium transition-colors ${
                 status !== 'connected' || running
                   ? 'bg-black/5 dark:bg-white/10 text-text-muted cursor-not-allowed'
-                  : 'bg-blue-600/60 hover:bg-blue-500/70 text-white'
+                  : 'bg-blue-600 hover:bg-blue-500 text-white'
               }`}
               onClick={runQuery}
               disabled={status !== 'connected' || running}
@@ -180,7 +180,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
             >
               {running ? (
                 <span className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 border border-white/40 border-t-transparent rounded-full animate-spin" />
+                  <span className="inline-block w-2 h-2 border border-text-muted/40 border-t-transparent rounded-full animate-spin" />
                   Running
                 </span>
               ) : '▶ Run'}
@@ -227,7 +227,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
       <div className="flex-1 min-h-0 overflow-auto">
         {running && (
           <div className="flex items-center justify-center h-full gap-2 text-text-muted">
-            <span className="inline-block w-4 h-4 border border-white/30 border-t-white/80 rounded-full animate-spin" />
+            <span className="inline-block w-4 h-4 border border-text-muted/30 border-t-text-muted rounded-full animate-spin" />
             Running query…
           </div>
         )}

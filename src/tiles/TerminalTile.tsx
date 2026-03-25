@@ -500,7 +500,7 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <div className="text-white/70 text-sm font-medium">
+          <div className="text-white text-sm font-medium">
             Process exited (code {exitInfo.code})
           </div>
           <button

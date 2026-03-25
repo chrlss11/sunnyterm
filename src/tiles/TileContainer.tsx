@@ -31,9 +31,9 @@ class TileErrorBoundary extends Component<{ children: React.ReactNode; tileId: s
         <div className="flex flex-col items-center justify-center h-full gap-2 p-4 text-center">
           <span className="text-red-400 text-2xl">⚠</span>
           <p className="text-red-300 text-xs font-medium">Tile crashed</p>
-          <p className="text-white/30 text-[10px] max-w-xs break-words">{this.state.error.message}</p>
+          <p className="text-text-muted text-[10px] max-w-xs break-words">{this.state.error.message}</p>
           <button
-            className="mt-2 px-3 py-1 text-xs bg-white/10 hover:bg-white/20 text-white/70 rounded transition-colors"
+            className="mt-2 px-3 py-1 text-xs bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-text-secondary rounded transition-colors"
             onClick={() => { resetFileViewerState(this.props.tileId); this.setState({ error: null }) }}
           >
             Retry
@@ -207,7 +207,7 @@ export function TileContainer({ tile, isSelected }: Props) {
               onChange={(e) => setRenameValue(e.target.value)}
               onBlur={commitRename}
               onKeyDown={handleRenameKey}
-              className="flex-1 min-w-0 bg-transparent outline-none text-xs font-medium text-white/90"
+              className="flex-1 min-w-0 bg-transparent outline-none text-xs font-medium text-text-primary"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
             />
@@ -277,7 +277,7 @@ export function TileContainer({ tile, isSelected }: Props) {
           style={{ pointerEvents: 'all' }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" className="absolute bottom-1 right-1 text-white/20">
+          <svg width="16" height="16" viewBox="0 0 16 16" className="absolute bottom-1 right-1 text-text-muted/30">
             <path d="M14 14L8 14M14 14L14 8M14 14L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </div>
