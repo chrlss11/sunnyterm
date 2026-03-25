@@ -71,6 +71,8 @@ function getNonTerminalDetail(tile: Tile): string {
       return 'Docker Topology'
     case 'chart':
       return 'Chart'
+    case 'inspector':
+      return 'Terminal Inspector'
     default:
       return tile.kind
   }

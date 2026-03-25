@@ -635,6 +635,15 @@ function CreateMenu({ x, y, canvasX, canvasY, containerRef, onClose }: {
       <div className={item} onClick={() => spawn('postgres')}><Database size={ico} /> PostgreSQL</div>
       <div className={item} onClick={() => spawn('browser')}><Compass size={ico} /> Browser</div>
       <div className={item} onClick={() => spawn('file')}><FolderOpen size={ico} /> File Viewer</div>
+      <div className={item} onClick={() => spawn('inspector')}>
+        <svg width={ico} height={ico} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="M10.5 10.5L14 14" />
+          <path d="M5.5 6h3" />
+          <path d="M5.5 8h2" />
+        </svg>
+        Inspector
+      </div>
       {allTiles.length > 1 && (
         <>
           <div className="my-0.5 border-t border-border" />
