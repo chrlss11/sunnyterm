@@ -104,22 +104,51 @@ function saveConnections(conns: ConnectionConfig[]) {
   localStorage.setItem(LS_KEY, JSON.stringify(conns))
 }
 
+// ─── Persistent state cache (survives view switches) ────────────────────────
+
+interface PgTileState {
+  config: ConnectionConfig
+  status: ConnStatus
+  statusMsg: string
+  showConnForm: boolean
+  sql: string
+  queryHistory: QueryHistoryEntry[]
+  result: PgQueryResult | null
+  tree: TreeNode[]
+}
+
+const pgStateCache = new Map<string, PgTileState>()
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function PostgresTile({ tileId }: { tileId: string }) {
-  const [config, setConfig] = useState<ConnectionConfig>({ ...DEFAULT_CONN })
+  const cached = pgStateCache.get(tileId)
+  const [config, setConfig] = useState<ConnectionConfig>(cached?.config ?? { ...DEFAULT_CONN })
   const [savedConns, setSavedConns] = useState<ConnectionConfig[]>(loadSavedConnections)
-  const [status, setStatus] = useState<ConnStatus>('disconnected')
-  const [statusMsg, setStatusMsg] = useState('')
-  const [showConnForm, setShowConnForm] = useState(true)
-  const [sql, setSql] = useState('SELECT version();')
-  const [queryHistory, setQueryHistory] = useState<QueryHistoryEntry[]>([])
+  const [status, setStatus] = useState<ConnStatus>(cached?.status ?? 'disconnected')
+  const [statusMsg, setStatusMsg] = useState(cached?.statusMsg ?? '')
+  const [showConnForm, setShowConnForm] = useState(cached?.showConnForm ?? true)
+  const [sql, setSql] = useState(cached?.sql ?? 'SELECT version();')
+  const [queryHistory, setQueryHistory] = useState<QueryHistoryEntry[]>(cached?.queryHistory ?? [])
   const [showHistory, setShowHistory] = useState(false)
-  const [result, setResult] = useState<PgQueryResult | null>(null)
+  const [result, setResult] = useState<PgQueryResult | null>(cached?.result ?? null)
   const [running, setRunning] = useState(false)
-  const [tree, setTree] = useState<TreeNode[]>([])
+  const [tree, setTree] = useState<TreeNode[]>(cached?.tree ?? [])
   const [platform, setPlatform] = useState('darwin')
   const sqlRef = useRef<HTMLTextAreaElement>(null)
+
+  // Save state to cache on every change (survives unmount)
+  useEffect(() => {
+    pgStateCache.set(tileId, { config, status, statusMsg, showConnForm, sql, queryHistory, result, tree })
+  }, [tileId, config, status, statusMsg, showConnForm, sql, queryHistory, result, tree])
+
+  // Cleanup cache when tile is removed
+  useEffect(() => {
+    return () => {
+      // Don't clean up on unmount — only when tile is removed from store
+      // The store's removeTile will handle this
+    }
+  }, [tileId])
 
   useEffect(() => {
     window.electronAPI.getPlatform().then(setPlatform)

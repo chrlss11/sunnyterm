@@ -139,7 +139,7 @@ export function TileContainer({ tile, isSelected }: Props) {
 
   const handleDuplicate = useCallback(() => {
     setCtxMenuOpen(false)
-    const newTile = spawnTile(tile.kind, tile.x + 30, tile.y + 30)
+    const newTile = spawnTile(tile.kind, tile.x + 30, tile.y + 30, undefined, undefined, tile.shell)
     if (tile.userRenamed) {
       renameTile(newTile.id, tile.name + ' (copy)')
     }

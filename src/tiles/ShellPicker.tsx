@@ -52,9 +52,15 @@ export function ShellPicker() {
 
   const handleSetDefault = useCallback((shell: ShellInfo, e: React.MouseEvent) => {
     e.stopPropagation()
-    const newDefault = defaultShell === shell.path ? '' : shell.path
+    const isRemoving = defaultShell === shell.path
+    const newDefault = isRemoving ? '' : shell.path
     window.electronAPI.shellsSetDefault(newDefault)
     setDefaultShell(newDefault)
+    // Import toast dynamically to show feedback
+    import('sonner').then(({ toast }) => {
+      if (isRemoving) toast.info('Default shell removed — using system default')
+      else toast.success(`Default shell: ${shell.name}`)
+    })
   }, [defaultShell])
 
   if (shells.length === 0) return null
@@ -62,9 +68,9 @@ export function ShellPicker() {
   return (
     <div ref={containerRef} className="relative" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       <button
-        className="p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/8 transition-colors flex items-center gap-0.5 cursor-pointer"
+        className={`p-1.5 rounded-md hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/8 transition-colors flex items-center gap-0.5 cursor-pointer ${defaultShell ? 'text-green-400' : 'text-text-muted'}`}
         onClick={() => setIsOpen(!isOpen)}
-        title="Choose shell for new terminal"
+        title={defaultShell ? `Default: ${shells.find(s => s.path === defaultShell)?.name ?? 'Custom'} (click to change)` : 'Choose shell for new terminal'}
       >
         <Terminal size={14} />
         <ChevronDown size={10} />
