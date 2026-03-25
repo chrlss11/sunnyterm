@@ -397,7 +397,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
   const inputCls = 'bg-black/[0.04] dark:bg-white/[0.06] border border-border rounded px-2 py-1 text-xs text-text-primary outline-none focus:border-blue-500/60 transition-colors'
 
   return (
-    <div className="flex flex-col h-full bg-surface text-white font-mono text-xs select-none">
+    <div className="flex flex-col h-full bg-surface text-text-primary font-mono text-xs select-none">
       {/* Connection bar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
         {/* Status dot */}

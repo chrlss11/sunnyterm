@@ -183,9 +183,8 @@ export function InfiniteCanvas() {
       setAlignMenu(null)
       setCreateMenu(null)
 
-      // Middle mouse, right-click, or space+left = pan
-      if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceHeld.current)) {
-        if (e.button === 2) rightClickStart.current = { x: e.clientX, y: e.clientY }
+      // Middle mouse or space+left = pan (right-click reserved for context menu)
+      if (e.button === 1 || (e.button === 0 && spaceHeld.current)) {
         isPanning.current = true
         lastMouse.current = { x: e.clientX, y: e.clientY }
         e.currentTarget.setPointerCapture(e.pointerId)
@@ -305,6 +304,7 @@ export function InfiniteCanvas() {
         setLasso(null)
         clickStart.current = null
       }
+      try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
       endDrag()
     },
     [endDrag]
@@ -321,10 +321,13 @@ export function InfiniteCanvas() {
         // Use exponential zoom so that fast pinches zoom faster than slow ones.
         // deltaY sign: positive = zoom out, negative = zoom in (standard browser behaviour)
         const { zoom: currentZoom, panX: currentPanX, panY: currentPanY } = useStore.getState()
+        const rect = containerRef.current?.getBoundingClientRect()
+        const localX = e.clientX - (rect?.left ?? 0)
+        const localY = e.clientY - (rect?.top ?? 0)
         const factor = Math.exp(-e.deltaY * 0.008)
         const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, currentZoom * factor))
-        const newPanX = e.clientX - (e.clientX - currentPanX) * (newZoom / currentZoom)
-        const newPanY = e.clientY - (e.clientY - currentPanY) * (newZoom / currentZoom)
+        const newPanX = localX - (localX - currentPanX) * (newZoom / currentZoom)
+        const newPanY = localY - (localY - currentPanY) * (newZoom / currentZoom)
         useStore.setState({ zoom: newZoom, panX: newPanX, panY: newPanY })
       } else {
         // Plain scroll = pan
@@ -339,17 +342,13 @@ export function InfiniteCanvas() {
   const onContextMenu = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
+
+      // Don't open menus while lassoing or panning
+      if (isLassoing.current || isPanning.current) return
+
       if (linkingFromId) {
         cancelLinking()
         return
-      }
-      // Skip context menu if user dragged (right-click pan)
-      const start = rightClickStart.current
-      rightClickStart.current = null
-      if (start) {
-        const dx = Math.abs(e.clientX - start.x)
-        const dy = Math.abs(e.clientY - start.y)
-        if (dx > 3 || dy > 3) return
       }
 
       if (selectedIds.length >= 2) {
@@ -425,12 +424,14 @@ export function InfiniteCanvas() {
         )
       })()}
 
-      {/* Canvas transform layer */}
+      {/* Canvas transform layer — uses CSS zoom instead of transform: scale()
+           so that interactive children (xterm.js terminals) get correct
+           pointer-event coordinate mapping from the browser. */}
       <div
         style={{
           position: 'absolute',
-          transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-          transformOrigin: '0 0'
+          transform: `translate(${panX / zoom}px, ${panY / zoom}px)`,
+          zoom: zoom,
         }}
       >
 
@@ -587,7 +588,7 @@ function CreateMenu({ x, y, canvasX, canvasY, containerRef, onClose }: {
   containerRef: React.RefObject<HTMLDivElement | null>
   onClose: () => void
 }) {
-  const { spawnTile } = useStore()
+  const { spawnTile, spawnSection } = useStore()
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -644,6 +645,8 @@ function CreateMenu({ x, y, canvasX, canvasY, containerRef, onClose }: {
         </svg>
         Inspector
       </div>
+      <div className="my-1 border-t border-border" />
+      <div className={item} onClick={() => { spawnSection(canvasX - 320, canvasY - 200); onClose() }}><LayoutGrid size={ico} /> Group</div>
       {allTiles.length > 1 && (
         <>
           <div className="my-0.5 border-t border-border" />

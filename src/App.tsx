@@ -37,6 +37,19 @@ function AppInner() {
   const initializedRef = useRef(false)
   const mainRef = useRef<HTMLDivElement>(null)
 
+  // ── Prevent Electron from navigating on file drop ─────────────────────────
+  // Must preventDefault on both dragover and drop to stop Electron's default
+  // file-open behavior. Terminal tiles handle drops via their own React handlers.
+  useEffect(() => {
+    const prevent = (e: DragEvent) => e.preventDefault()
+    document.addEventListener('dragover', prevent)
+    document.addEventListener('drop', prevent)
+    return () => {
+      document.removeEventListener('dragover', prevent)
+      document.removeEventListener('drop', prevent)
+    }
+  }, [])
+
   // ── Reset scroll positions when returning to canvas ────────────────────────
   useEffect(() => {
     if (viewMode === 'canvas' && mainRef.current) {
@@ -118,8 +131,8 @@ function AppInner() {
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden">
-      {/* Toolbar */}
-      <Toolbar />
+      {/* Top bar — minimal: window drag area + view mode toggle */}
+      <TitleBar />
 
       {/* Main view — InfiniteCanvas always mounted (in-flow), FocusView overlays on top */}
       <div ref={mainRef} className="flex-1 min-h-0 relative overflow-hidden">
@@ -136,6 +149,9 @@ function AppInner() {
             <FocusView />
           </div>
         )}
+
+        {/* Canvas bottom toolbar */}
+        {viewMode === 'canvas' && <CanvasToolbar />}
       </div>
 
       {/* Auto-update notification */}
@@ -167,19 +183,34 @@ function AppInner() {
   )
 }
 
-// ── Toolbar ───────────────────────────────────────────────────────────────────
+// ── Title bar (minimal top bar for window dragging) ──────────────────────────
 
-function Toolbar() {
-  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, toggleDark, zoomIn, zoomOut, setViewMode, toggleAutoGrid, toggleKanbanMode } = useStore()
+function TitleBar() {
+  const viewMode = useStore((s) => s.viewMode)
+  const { setViewMode } = useStore()
+
+  return (
+    <div
+      className="flex items-center justify-center px-3 shrink-0"
+      style={{ height: 44, WebkitAppRegion: 'drag' } as React.CSSProperties}
+    >
+      {/* View mode toggle — centered */}
+      <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+    </div>
+  )
+}
+
+// ── Canvas bottom toolbar ────────────────────────────────────────────────────
+
+function CanvasToolbar() {
+  const { spawnTile, toggleMinimap, toggleSearch, undo, redo, resetView, zoomIn, zoomOut, toggleAutoGrid, toggleKanbanMode } = useStore()
   const undoStack = useStore((s) => s.undoStack)
   const redoStack = useStore((s) => s.redoStack)
   const showMinimap = useStore((s) => s.showMinimap)
   const autoGrid = useStore((s) => s.autoGrid)
   const kanbanMode = useStore((s) => s.kanbanMode)
-  const theme = useStore((s) => s.theme)
   const zoom = useStore((s) => s.zoom)
-  const viewMode = useStore((s) => s.viewMode)
-  const [expanded, setExpanded] = React.useState(false)
+  const [expanded, setExpanded] = React.useState(true)
   const [platform, setPlatform] = React.useState<string>('darwin')
 
   React.useEffect(() => {
@@ -190,132 +221,118 @@ function Toolbar() {
   const mod = isMac ? '⌘' : 'Ctrl+'
 
   const ico = 14
-  const btn = 'p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/8 transition-colors flex items-center gap-1.5'
-  const btnLabel = 'p-1.5 px-2 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/8 transition-colors flex items-center gap-1.5'
+  const btn = 'p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/8 transition-colors flex items-center gap-1.5 cursor-pointer'
   const sep = 'w-px h-5 bg-border mx-0.5'
 
   return (
     <div
-      className="flex items-center gap-0.5 px-3 shrink-0"
-      style={{ height: 44, WebkitAppRegion: 'drag' } as React.CSSProperties}
+      className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 px-2 py-1 rounded-xl border border-border bg-toolbar/80 backdrop-blur-md shadow-lg"
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* macOS traffic light spacer — only needed on macOS */}
-      {isMac && <div style={{ width: 72 }} />}
+      <button
+        className={btn}
+        onClick={() => setExpanded((v) => !v)}
+        title={expanded ? 'Collapse toolbar' : 'Expand toolbar'}
+      >
+        {expanded ? <PanelLeftClose size={ico} /> : <PanelLeftOpen size={ico} />}
+      </button>
 
-      <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <button
-          className={btn}
-          onClick={() => setExpanded((v) => !v)}
-          title={expanded ? 'Collapse toolbar' : 'Expand toolbar'}
-        >
-          {expanded ? <PanelLeftClose size={ico} /> : <PanelLeftOpen size={ico} />}
-        </button>
+      {expanded && (
+        <>
+          <div className={sep} />
 
-        {expanded && (
-          <>
-            <div className={sep} />
+          <button className={btn} onClick={() => spawnTile('terminal')} title={`New Terminal (${mod}T)`}>
+            <Terminal size={ico} />
+          </button>
+          <ShellPicker />
+          <button className={btn} onClick={() => spawnTile('http')} title={`New HTTP Client (${mod}⇧H)`}>
+            <Globe size={ico} />
+          </button>
+          <button className={btn} onClick={() => spawnTile('postgres')} title={`New PostgreSQL Client (${mod}⇧P)`}>
+            <Database size={ico} />
+          </button>
+          <button className={btn} onClick={() => spawnTile('browser')} title={`New Browser (${mod}⇧B)`}>
+            <Compass size={ico} />
+          </button>
+          <button className={btn} onClick={() => spawnTile('file')} title={`New File Viewer (${mod}⇧E)`}>
+            <FolderOpen size={ico} />
+          </button>
+          <button className={btn} onClick={() => spawnTile('lens')} title="New Lens (filtered view)">
+            <Search size={ico} />
+          </button>
+          <button className={btn} onClick={() => spawnTile('docker')} title="New Docker Topology">
+            <Container size={ico} />
+          </button>
 
-            <button className={btn} onClick={() => spawnTile('terminal')} title={`New Terminal (${mod}T)`}>
-              <Terminal size={ico} />
-            </button>
-            <ShellPicker />
-            <button className={btn} onClick={() => spawnTile('http')} title={`New HTTP Client (${mod}⇧H)`}>
-              <Globe size={ico} />
-            </button>
-            <button className={btn} onClick={() => spawnTile('postgres')} title={`New PostgreSQL Client (${mod}⇧P)`}>
-              <Database size={ico} />
-            </button>
-            <button className={btn} onClick={() => spawnTile('browser')} title={`New Browser (${mod}⇧B)`}>
-              <Compass size={ico} />
-            </button>
-            <button className={btn} onClick={() => spawnTile('file')} title={`New File Viewer (${mod}⇧E)`}>
-              <FolderOpen size={ico} />
-            </button>
-            <button className={btn} onClick={() => spawnTile('lens')} title="New Lens (filtered view)">
-              <Search size={ico} />
-            </button>
-            <button className={btn} onClick={() => spawnTile('docker')} title="New Docker Topology">
-              <Container size={ico} />
-            </button>
+          <div className={sep} />
 
-            <div className={sep} />
+          <button className={btn} onClick={undo} disabled={undoStack.length === 0} title={`Undo (${mod}Z)`}>
+            <Undo2 size={ico} />
+          </button>
+          <button className={btn} onClick={redo} disabled={redoStack.length === 0} title={`Redo (${mod}⇧Z)`}>
+            <Redo2 size={ico} />
+          </button>
 
-            <button className={btn} onClick={undo} disabled={undoStack.length === 0} title={`Undo (${mod}Z)`}>
-              <Undo2 size={ico} />
-            </button>
-            <button className={btn} onClick={redo} disabled={redoStack.length === 0} title={`Redo (${mod}⇧Z)`}>
-              <Redo2 size={ico} />
-            </button>
+          <div className={sep} />
 
-            <div className={sep} />
+          <button
+            className={`${btn} ${showMinimap ? 'text-blue-400' : ''}`}
+            onClick={toggleMinimap}
+            title={`Toggle Minimap (${mod}M)`}
+          >
+            <Map size={ico} />
+          </button>
+          <button
+            className={`${btn} ${autoGrid ? 'text-green-400' : ''}`}
+            onClick={toggleAutoGrid}
+            title="Auto-Grid (tiles auto-arrange, no overlap)"
+          >
+            <LayoutGrid size={ico} />
+          </button>
+          <button
+            className={`${btn} ${kanbanMode ? 'text-green-400' : ''}`}
+            onClick={toggleKanbanMode}
+            title="Kanban Mode (sections as columns)"
+          >
+            <Columns3 size={ico} />
+          </button>
+          <button className={btn} onClick={toggleSearch} title={`Search (${mod}F)`}>
+            <Search size={ico} />
+          </button>
+          <button
+            className={btn}
+            onClick={() => window.electronAPI.quickTerminalToggle()}
+            title="Quick Terminal Mode (Ctrl+`)"
+          >
+            <PanelTop size={ico} />
+          </button>
 
-            <button
-              className={`${btn} ${showMinimap ? 'text-blue-400' : ''}`}
-              onClick={toggleMinimap}
-              title={`Toggle Minimap (${mod}M)`}
-            >
-              <Map size={ico} />
-            </button>
-            <button
-              className={`${btn} ${autoGrid ? 'text-green-400' : ''}`}
-              onClick={toggleAutoGrid}
-              title="Auto-Grid (tiles auto-arrange, no overlap)"
-            >
-              <LayoutGrid size={ico} />
-            </button>
-            <button
-              className={`${btn} ${kanbanMode ? 'text-green-400' : ''}`}
-              onClick={toggleKanbanMode}
-              title="Kanban Mode (sections as columns)"
-            >
-              <Columns3 size={ico} />
-            </button>
-            <button className={btn} onClick={toggleSearch} title={`Search (${mod}F)`}>
-              <Search size={ico} />
-            </button>
-            <button
-              className={btn}
-              onClick={() => window.electronAPI.quickTerminalToggle()}
-              title="Quick Terminal Mode (Ctrl+`)"
-            >
-              <PanelTop size={ico} />
-            </button>
+          <div className={sep} />
 
-            <div className={sep} />
+          <button className={btn} onClick={zoomOut} title={`Zoom out (${mod}-)`}>
+            <ZoomOut size={ico} />
+          </button>
+          <button
+            className={`${btn} font-mono tabular-nums min-w-[42px] justify-center text-[11px]`}
+            onClick={resetView}
+            title={`Reset zoom (${mod}0)`}
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button className={btn} onClick={zoomIn} title={`Zoom in (${mod}+)`}>
+            <ZoomIn size={ico} />
+          </button>
 
-            <button className={btn} onClick={zoomOut} title={`Zoom out (${mod}-)`}>
-              <ZoomOut size={ico} />
-            </button>
-            <button
-              className={`${btn} font-mono tabular-nums min-w-[42px] justify-center text-[11px]`}
-              onClick={resetView}
-              title={`Reset zoom (${mod}0)`}
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-            <button className={btn} onClick={zoomIn} title={`Zoom in (${mod}+)`}>
-              <ZoomIn size={ico} />
-            </button>
+          <div className={sep} />
 
-            <div className={sep} />
+          <ThemePicker />
 
-            <ThemePicker />
+          <div className={sep} />
 
-            <div className={sep} />
-
-            <WorkspacePicker />
-          </>
-        )}
-      </div>
-
-      {/* Spacer */}
-      <div className="flex-1" />
-
-      {/* View mode toggle — always visible */}
-      <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
-
-      {/* Windows title bar buttons spacer */}
-      {!isMac && <div style={{ width: 140 }} />}
+          <WorkspacePicker />
+        </>
+      )}
     </div>
   )
 }
@@ -327,12 +344,12 @@ function ViewModeToggle({ viewMode, onChange }: { viewMode: ViewMode; onChange: 
 
   return (
     <div
-      className="relative flex items-center rounded-full bg-black/8 dark:bg-white/6 p-[3px]"
+      className="relative flex items-center rounded-full bg-white dark:bg-white/6 p-[3px] border border-black/8 dark:border-transparent"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       {/* Sliding pill */}
       <div
-        className="absolute top-[3px] h-[calc(100%-6px)] w-[calc(50%-3px)] rounded-full bg-white/12 shadow-[0_1px_2px_rgba(0,0,0,0.15)] transition-transform duration-200 ease-out"
+        className="absolute top-[3px] h-[calc(100%-6px)] w-[calc(50%-3px)] rounded-full bg-canvas dark:bg-white/12 shadow-[0_1px_2px_rgba(0,0,0,0.1)] transition-transform duration-200 ease-out"
         style={{ transform: isCanvas ? 'translateX(0)' : 'translateX(100%)' }}
       />
 
@@ -407,6 +424,15 @@ function ConfirmClearModal({ tileCount, onConfirm, onCancel }: { tileCount: numb
 const THEME_COLORS: Record<ThemeName, string> = {
   dark: '#1B1D1F',
   light: '#ffffff',
+  'github-light': '#0969da',
+  'rose-pine-dawn': '#d7827e',
+  'solarized-light': '#eee8d5',
+  nord: '#88c0d0',
+  dracula: '#bd93f9',
+  monokai: '#a6e22e',
+  solarized: '#268bd2',
+  tokyo: '#7aa2f7',
+  catppuccin: '#cba6f7',
   claude: '#e8a44a',
   vino: '#c45a7c'
 }
@@ -435,16 +461,16 @@ function ThemePicker() {
         onClick={() => setOpen((v) => !v)}
       >
         <span
-          className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/20"
+          className="w-2.5 h-2.5 rounded-full shrink-0 border border-black/10 dark:border-white/20"
           style={{ background: THEME_COLORS[current.name] }}
         />
-        <span>{current.label}</span>
-        <ChevronDown size={10} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span className="whitespace-nowrap">{current.label}</span>
+        <ChevronDown size={10} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <div
-          className="absolute top-full left-0 mt-1 w-36 rounded-lg border border-border bg-tile shadow-xl py-1 z-50"
+          className="absolute bottom-full left-0 mb-1 w-36 rounded-lg border border-border bg-tile shadow-xl py-1 z-50"
         >
           {THEME_ORDER.map((name) => {
             const t = THEMES[name]
@@ -460,7 +486,7 @@ function ThemePicker() {
                 onClick={() => { setTheme(name); setOpen(false) }}
               >
                 <span
-                  className="w-3 h-3 rounded-full shrink-0 border border-white/20"
+                  className="w-3 h-3 rounded-full shrink-0 border border-black/10 dark:border-white/20"
                   style={{ background: THEME_COLORS[name] }}
                 />
                 {t.label}

@@ -210,10 +210,10 @@ export function HttpTile({ tileId }: { tileId: string }) {
   }
 
   const inputCls = 'bg-black/[0.04] dark:bg-white/[0.06] border border-border rounded px-2 py-1 text-xs text-text-primary outline-none focus:border-blue-500/60 transition-colors'
-  const tabCls = (active: boolean) => `px-3 py-1 text-xs cursor-pointer transition-colors ${active ? 'text-white border-b border-blue-400' : 'text-text-muted hover:text-text-secondary'}`
+  const tabCls = (active: boolean) => `px-3 py-1 text-xs cursor-pointer transition-colors ${active ? 'text-text-primary border-b border-blue-400' : 'text-text-muted hover:text-text-secondary'}`
 
   return (
-    <div className="flex flex-col h-full bg-surface text-white font-mono text-xs select-none">
+    <div className="flex flex-col h-full bg-surface text-text-primary font-mono text-xs select-none">
 
       {/* URL bar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
@@ -223,7 +223,7 @@ export function HttpTile({ tileId }: { tileId: string }) {
           onChange={(e) => setMethod(e.target.value as Method)}
         >
           {METHODS.map((m) => (
-            <option key={m} value={m} className={`text-white bg-surface`}>{m}</option>
+            <option key={m} value={m} className={`text-text-primary bg-surface`}>{m}</option>
           ))}
         </select>
 
@@ -237,7 +237,7 @@ export function HttpTile({ tileId }: { tileId: string }) {
         />
 
         <button
-          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${loading ? 'bg-yellow-600/40 text-yellow-300 cursor-not-allowed' : 'bg-blue-600/60 hover:bg-blue-500/70 text-white'}`}
+          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${loading ? 'bg-yellow-600/40 text-yellow-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
           onClick={sendRequest}
           disabled={loading}
         >
@@ -250,7 +250,7 @@ export function HttpTile({ tileId }: { tileId: string }) {
         </button>
 
         <button
-          className={`px-2 py-1 rounded text-xs transition-colors ${showHistory ? 'text-white bg-black/5 dark:bg-white/10' : 'text-text-muted hover:text-text-secondary'}`}
+          className={`px-2 py-1 rounded text-xs transition-colors ${showHistory ? 'text-text-primary bg-black/5 dark:bg-white/10' : 'text-text-muted hover:text-text-secondary'}`}
           onClick={() => setShowHistory((s) => !s)}
           title="Request history"
         >
@@ -271,10 +271,10 @@ export function HttpTile({ tileId }: { tileId: string }) {
                 setShowHistory(false)
               }}
             >
-              <span className={`font-bold w-14 shrink-0 ${METHOD_COLORS[entry.method as Method] ?? 'text-white/60'}`}>
+              <span className={`font-bold w-14 shrink-0 ${METHOD_COLORS[entry.method as Method] ?? 'text-text-muted'}`}>
                 {entry.method}
               </span>
-              <span className="flex-1 truncate text-white/60">{entry.url}</span>
+              <span className="flex-1 truncate text-text-muted">{entry.url}</span>
               {entry.response?.status && (
                 <span className={`shrink-0 ${statusColor(entry.response.status)}`}>
                   {entry.response.status}
@@ -390,7 +390,7 @@ export function HttpTile({ tileId }: { tileId: string }) {
         <div className="flex-1 min-h-0 overflow-auto p-2">
           {loading && (
             <div className="flex items-center justify-center h-full text-text-muted gap-2">
-              <span className="inline-block w-4 h-4 border border-white/30 border-t-white/80 rounded-full animate-spin" />
+              <span className="inline-block w-4 h-4 border border-text-muted/30 border-t-text-muted rounded-full animate-spin" />
               Sending request…
             </div>
           )}
@@ -423,7 +423,7 @@ export function HttpTile({ tileId }: { tileId: string }) {
                   {Object.entries(response.headers ?? {}).map(([k, v]) => (
                     <div key={k} className="flex gap-2">
                       <span className="text-orange-300 shrink-0">{k}:</span>
-                      <span className="text-white/60 break-all">{v}</span>
+                      <span className="text-text-muted break-all">{v}</span>
                     </div>
                   ))}
                 </div>

@@ -34,6 +34,9 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x64]
     steps:
       - uses: actions/checkout@v4
 
@@ -49,9 +52,23 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Rename DMG
+        run: |
+          ls -la release/*.dmg
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            mv release/*-arm64.dmg release/SunnyTerm-arm64.dmg
+          else
+            # x64 DMG has no arch suffix in the filename
+            for f in release/*.dmg; do
+              case "$f" in *-arm64.dmg) continue;; esac
+              mv "$f" release/SunnyTerm-x64.dmg
+              break
+            done
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-artifacts
+          name: macos-artifacts-${{ matrix.arch }}
           path: |
             release/*.dmg
             release/*.zip
@@ -94,6 +111,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          name: SunnyTerm ${{ github.ref_name }}
           draft: false
           generate_release_notes: true
           files: |

@@ -135,6 +135,7 @@ export interface CanvasStore {
   focusTile: (id: string | null) => void
   renameTile: (id: string, name: string) => void
   autoRenameTile: (id: string, name: string) => void
+  setTileFontSize: (id: string, size: number) => void
 
   setSelectedIds: (ids: string[]) => void
   clearSelection: () => void
@@ -142,6 +143,7 @@ export interface CanvasStore {
   alignTiles: (direction: 'left' | 'right' | 'top' | 'bottom' | 'h-center' | 'v-center' | 'h-distribute' | 'v-distribute' | 'grid') => void
 
   createSection: (tileIds: string[]) => void
+  spawnSection: (x: number, y: number) => void
   removeSection: (id: string) => void
   renameSection: (id: string, name: string) => void
   duplicateSection: (id: string) => void
@@ -493,6 +495,13 @@ export const useStore = create<CanvasStore>()(
       }))
     },
 
+    setTileFontSize: (id, size) => {
+      const clamped = Math.max(8, Math.min(32, size))
+      set((s) => ({
+        tiles: s.tiles.map((t) => t.id === id ? { ...t, fontSize: clamped } : t)
+      }))
+    },
+
     // ── Selection ──────────────────────────────────────────────────────────
 
     setSelectedIds: (selectedIds) => set({ selectedIds }),
@@ -612,6 +621,19 @@ export const useStore = create<CanvasStore>()(
         h: snapToGrid(maxY - minY)
       }
       set({ sections: [...sections, section], selectedIds: [] })
+    },
+
+    spawnSection: (x, y) => {
+      const { sections } = get()
+      const section: Section = {
+        id: nextSectionId(),
+        name: `Section ${sections.length + 1}`,
+        x: snapToGrid(x),
+        y: snapToGrid(y),
+        w: snapToGrid(640),
+        h: snapToGrid(400)
+      }
+      set({ sections: [...sections, section] })
     },
 
     removeSection: (id) => {

@@ -85,7 +85,7 @@ export function WorkspacePicker() {
 
       {isOpen && (
         <div
-          className="absolute top-full left-0 mt-1 w-56 rounded border border-border bg-tile shadow-xl z-[9999] py-1"
+          className="absolute bottom-full left-0 mb-1 w-56 rounded border border-border bg-tile shadow-xl z-[9999] py-1"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {/* Save as input */}

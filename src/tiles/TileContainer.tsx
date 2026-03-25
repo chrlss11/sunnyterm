@@ -9,7 +9,7 @@ import { LensTile } from './LensTile'
 import { DockerTile } from './DockerTile'
 import { ChartTile } from './ChartTile'
 import { InspectorTile } from './InspectorTile'
-import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal, Terminal, BarChart3 } from 'lucide-react'
+import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal, Terminal, BarChart3, Minus, Plus } from 'lucide-react'
 import { getTerminalEntry } from '../lib/terminalRegistry'
 import type { ShellInfo } from '../types'
 import { TileKindIcon } from './TileKindIcon'
@@ -38,9 +38,9 @@ class TileErrorBoundary extends Component<{ children: React.ReactNode; tileId: s
         <div className="flex flex-col items-center justify-center h-full gap-2 p-4 text-center">
           <span className="text-red-400 text-2xl">⚠</span>
           <p className="text-red-300 text-xs font-medium">Tile crashed</p>
-          <p className="text-white/30 text-[10px] max-w-xs break-words">{this.state.error.message}</p>
+          <p className="text-text-muted text-[10px] max-w-xs break-words">{this.state.error.message}</p>
           <button
-            className="mt-2 px-3 py-1 text-xs bg-white/10 hover:bg-white/20 text-white/70 rounded transition-colors"
+            className="mt-2 px-3 py-1 text-xs bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-text-secondary rounded transition-colors"
             onClick={() => { resetFileViewerState(this.props.tileId); this.setState({ error: null }) }}
           >
             Retry
@@ -60,7 +60,7 @@ export function TileContainer({ tile, isSelected }: Props) {
   const viewMode = useStore((s) => s.viewMode)
   const zoom = useStore((s) => s.zoom)
   const drag = useStore((s) => s.drag)
-  const { focusTile, removeTile, renameTile, spawnTile, startLinking } = useStore()
+  const { focusTile, removeTile, renameTile, spawnTile, startLinking, setTileFontSize } = useStore()
   const isResizing = drag?.tileId === tile.id && drag?.kind === 'resize'
   const isFocused = focusedId === tile.id
   const isExited = exitedTileIds.includes(tile.id)
@@ -233,7 +233,7 @@ export function TileContainer({ tile, isSelected }: Props) {
               onChange={(e) => setRenameValue(e.target.value)}
               onBlur={commitRename}
               onKeyDown={handleRenameKey}
-              className="flex-1 min-w-0 bg-transparent outline-none text-xs font-medium text-white/90"
+              className="flex-1 min-w-0 bg-transparent outline-none text-xs font-medium text-text-primary"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
             />
@@ -248,10 +248,31 @@ export function TileContainer({ tile, isSelected }: Props) {
             <span className="text-yellow-400 text-xs" title="Output linked">⇒</span>
           )}
 
+          {/* Font size controls (terminal only) */}
+          {tile.kind === 'terminal' && (
+            <div className="flex items-center gap-0.5 ml-auto" onMouseDown={(e) => e.stopPropagation()}>
+              <button
+                className="flex items-center justify-center w-4 h-4 rounded transition-colors"
+                onClick={(e) => { e.stopPropagation(); setTileFontSize(tile.id, (tile.fontSize ?? 13) - 1) }}
+                title="Decrease font size"
+              >
+                <Minus size={10} className="text-text-muted hover:text-text-primary" />
+              </button>
+              <span className="text-[9px] text-text-muted w-4 text-center select-none">{tile.fontSize ?? 13}</span>
+              <button
+                className="flex items-center justify-center w-4 h-4 rounded transition-colors"
+                onClick={(e) => { e.stopPropagation(); setTileFontSize(tile.id, (tile.fontSize ?? 13) + 1) }}
+                title="Increase font size"
+              >
+                <Plus size={10} className="text-text-muted hover:text-text-primary" />
+              </button>
+            </div>
+          )}
+
           {/* Menu button */}
           <button
             ref={menuBtnRef}
-            className="flex items-center justify-center transition-colors ml-auto"
+            className={`flex items-center justify-center transition-colors ${tile.kind !== 'terminal' ? 'ml-auto' : ''}`}
             onClick={(e) => {
               e.stopPropagation()
               setCtxMenuOpen((v) => !v)
@@ -289,7 +310,7 @@ export function TileContainer({ tile, isSelected }: Props) {
           style={{ pointerEvents: 'all' }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" className="absolute bottom-1 right-1 text-white/20">
+          <svg width="16" height="16" viewBox="0 0 16 16" className="absolute bottom-1 right-1 text-text-muted/30">
             <path d="M14 14L8 14M14 14L14 8M14 14L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </div>
