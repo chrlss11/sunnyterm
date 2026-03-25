@@ -78,7 +78,7 @@ export function ShellPicker() {
 
       {isOpen && (
         <div
-          className="absolute top-full left-0 mt-1 w-56 rounded-lg border shadow-xl py-1 z-50"
+          className="absolute bottom-full left-0 mb-1 w-56 rounded-lg border shadow-xl py-1 z-50"
           style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
         >
           <div className="px-3 py-1 text-[10px] text-text-muted font-medium uppercase tracking-wider">
