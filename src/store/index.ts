@@ -201,15 +201,15 @@ export interface CanvasStore {
 function runAutoGrid(get: () => CanvasStore, set: (fn: any) => void) {
   const { tiles } = get()
   if (tiles.length === 0) return
-  const gap = 24
+  const gap = 36
   const cols = Math.max(1, Math.ceil(Math.sqrt(tiles.length)))
   const sorted = [...tiles].sort((a, b) => a.y - b.y || a.x - b.x)
 
-  // Compute column widths and row heights (use max in each col/row)
-  const colWidths: number[] = Array(cols).fill(0)
   const rowCount = Math.ceil(sorted.length / cols)
-  const rowHeights: number[] = Array(rowCount).fill(0)
 
+  // Compute max width per column and max height per row
+  const colWidths: number[] = Array(cols).fill(0)
+  const rowHeights: number[] = Array(rowCount).fill(0)
   sorted.forEach((t, i) => {
     const col = i % cols
     const row = Math.floor(i / cols)
@@ -217,20 +217,25 @@ function runAutoGrid(get: () => CanvasStore, set: (fn: any) => void) {
     rowHeights[row] = Math.max(rowHeights[row], t.h)
   })
 
-  const startX = Math.min(...sorted.map((t) => t.x), 60)
-  const startY = Math.min(...sorted.map((t) => t.y), 60)
+  // Precompute cumulative X and Y offsets
+  const colX: number[] = [60]
+  for (let c = 1; c < cols; c++) colX.push(colX[c - 1] + colWidths[c - 1] + gap)
+  const rowY: number[] = [60]
+  for (let r = 1; r < rowCount; r++) rowY.push(rowY[r - 1] + rowHeights[r - 1] + gap)
+
+  // Build updates map
+  const updates = new Map<string, { x: number; y: number }>()
+  sorted.forEach((t, i) => {
+    const col = i % cols
+    const row = Math.floor(i / cols)
+    updates.set(t.id, { x: colX[col], y: rowY[row] })
+  })
 
   set((s: CanvasStore) => ({
     tiles: s.tiles.map((t) => {
-      const idx = sorted.findIndex((st) => st.id === t.id)
-      if (idx === -1) return t
-      const col = idx % cols
-      const row = Math.floor(idx / cols)
-      let x = startX
-      for (let c = 0; c < col; c++) x += colWidths[c] + gap
-      let y = startY
-      for (let r = 0; r < row; r++) y += rowHeights[r] + gap
-      return { ...t, x: snapToGrid(x), y: snapToGrid(y) }
+      const pos = updates.get(t.id)
+      if (!pos) return t
+      return { ...t, x: pos.x, y: pos.y }
     })
   }))
 }
@@ -240,67 +245,62 @@ function runKanbanLayout(get: () => CanvasStore, set: (fn: any) => void) {
   const { tiles, sections } = get()
   if (sections.length === 0 || tiles.length === 0) return
 
-  const GAP = 24
-  const HEADER_H = 40
+  const GAP = 36
+  const HEADER_H = 44
   const viewportW = window.innerWidth
-  const colWidth = Math.max(400, (viewportW - GAP * (sections.length + 1)) / sections.length)
+  const colWidth = Math.max(400, Math.floor((viewportW - GAP * (sections.length + 1)) / sections.length))
 
-  const updatedTiles = [...tiles]
-  const updatedSections = [...sections]
+  // Compute column X positions
+  const colXPositions = sections.map((_, i) => GAP + i * (colWidth + GAP))
 
-  updatedSections.forEach((section, colIdx) => {
-    const colX = GAP + colIdx * (colWidth + GAP)
+  // Assign each tile to the nearest column based on its X center
+  const columnTiles: Map<number, typeof tiles> = new Map()
+  sections.forEach((_, i) => columnTiles.set(i, []))
 
-    // Find tiles within this section's bounds
-    const sectionTiles = updatedTiles.filter(t => {
-      const cx = t.x + t.w / 2
-      const cy = t.y + t.h / 2
-      return cx >= section.x && cx <= section.x + section.w &&
-             cy >= section.y && cy <= section.y + section.h
+  for (const tile of tiles) {
+    const cx = tile.x + tile.w / 2
+    let bestCol = 0
+    let bestDist = Infinity
+    colXPositions.forEach((colX, i) => {
+      const dist = Math.abs(cx - (colX + colWidth / 2))
+      if (dist < bestDist) { bestDist = dist; bestCol = i }
     })
-
-    let currentY = GAP + HEADER_H + GAP
-    sectionTiles.forEach(tile => {
-      const idx = updatedTiles.findIndex(t => t.id === tile.id)
-      if (idx !== -1) {
-        updatedTiles[idx] = { ...updatedTiles[idx], x: snapToGrid(colX), y: snapToGrid(currentY), w: snapToGrid(colWidth) }
-        currentY += updatedTiles[idx].h + GAP
-      }
-    })
-
-    updatedSections[colIdx] = {
-      ...section,
-      x: snapToGrid(colX),
-      y: snapToGrid(GAP),
-      w: snapToGrid(colWidth),
-      h: snapToGrid(Math.max(400, currentY + GAP))
-    }
-  })
-
-  // Handle unassigned tiles — place them in the first section
-  const unassigned = updatedTiles.filter(t => {
-    return !updatedSections.some(sec => {
-      const cx = t.x + t.w / 2
-      const cy = t.y + t.h / 2
-      return cx >= sec.x && cx <= sec.x + sec.w &&
-             cy >= sec.y && cy <= sec.y + sec.h
-    })
-  })
-
-  if (unassigned.length > 0 && updatedSections.length > 0) {
-    const firstSec = updatedSections[0]
-    let currentY = firstSec.y + firstSec.h
-    unassigned.forEach(tile => {
-      const idx = updatedTiles.findIndex(t => t.id === tile.id)
-      if (idx !== -1) {
-        updatedTiles[idx] = { ...updatedTiles[idx], x: snapToGrid(firstSec.x), y: snapToGrid(currentY), w: snapToGrid(firstSec.w) }
-        currentY += updatedTiles[idx].h + GAP
-      }
-    })
-    updatedSections[0] = { ...firstSec, h: snapToGrid(Math.max(firstSec.h, currentY + GAP)) }
+    columnTiles.get(bestCol)!.push(tile)
   }
 
-  set({ tiles: updatedTiles, sections: updatedSections })
+  // Sort tiles within each column by Y position
+  columnTiles.forEach((tiles) => tiles.sort((a, b) => a.y - b.y))
+
+  // Build position updates
+  const tileUpdates = new Map<string, { x: number; y: number; w: number }>()
+  const sectionUpdates: typeof sections = []
+
+  sections.forEach((section, colIdx) => {
+    const colX = colXPositions[colIdx]
+    const colTiles = columnTiles.get(colIdx) ?? []
+    let currentY = GAP + HEADER_H + GAP
+
+    for (const tile of colTiles) {
+      tileUpdates.set(tile.id, { x: colX, y: currentY, w: colWidth })
+      currentY += tile.h + GAP
+    }
+
+    sectionUpdates.push({
+      ...section,
+      x: colX,
+      y: GAP,
+      w: colWidth,
+      h: Math.max(400, currentY + GAP)
+    })
+  })
+
+  set((s: CanvasStore) => ({
+    tiles: s.tiles.map(t => {
+      const u = tileUpdates.get(t.id)
+      return u ? { ...t, x: u.x, y: u.y, w: u.w } : t
+    }),
+    sections: sectionUpdates
+  }))
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -1006,13 +1006,21 @@ export const useStore = create<CanvasStore>()(
 
       // Show save toast for explicit saves or named workspaces
       if (explicit || workspaceName !== DEFAULT_WORKSPACE) {
-        get().triggerSavedToast()
+        toast.success(`Workspace "${workspaceName === DEFAULT_WORKSPACE ? 'default' : workspaceName}" guardado`)
       }
     },
 
     loadWorkspace: async (name) => {
       const layout = await window.electronAPI.workspaceLoad(name)
       if (!layout) return
+
+      // Kill all existing PTYs before loading new workspace
+      const oldTiles = get().tiles
+      for (const t of oldTiles) {
+        if (t.kind === 'terminal') {
+          window.electronAPI.ptyKill(t.id).catch(() => {})
+        }
+      }
 
       set({
         tiles: layout.tiles,
@@ -1026,8 +1034,11 @@ export const useStore = create<CanvasStore>()(
         redoStack: [],
         drag: null,
         tileCwds: layout.tileCwds ?? {},
-        exitedTileIds: []
+        exitedTileIds: [],
+        closedTileStack: []
       })
+
+      toast.success(`Workspace "${name}" cargado`)
 
       const { isDark } = get()
       const appState: Partial<PersistedAppState> = {
