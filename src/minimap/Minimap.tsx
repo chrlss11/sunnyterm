@@ -15,6 +15,7 @@ const TILE_ICONS: Record<string, string> = {
   lens: 'M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35', // search/lens
   docker: 'M2 11h4v4H2zM8 11h4v4H8zM14 11h4v4h-4zM8 6h4v4H8zM14 6h4v4h-4z', // container stacks
   chart: 'M5 20V10M12 20V4M19 20V14', // bar chart
+  k8s: 'M12 2v6M12 16v6M2 12h6M16 12h6M12 12m-3 0a3 3 0 106 0 3 3 0 00-6 0', // kubernetes wheel
   inspector: 'M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35M7 10h6M7 14h4', // magnifying glass with code
 }
 

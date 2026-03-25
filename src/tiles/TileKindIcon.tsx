@@ -83,6 +83,13 @@ export function TileKindIcon({ kind, active, exited, size = 14 }: Props) {
         <path d="M14 9.5c-1 1-2.5 2.5-5 3-1.5.3-3 .3-4.5 0C2.5 12 1.5 10.5 1 9" />
       </svg>
     ),
+    k8s: (
+      <svg width={s} height={s} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity }}>
+        <circle cx="8" cy="8" r="5.5" />
+        <path d="M8 2.5v3M8 10.5v3M2.5 8h3M10.5 8h3" />
+        <circle cx="8" cy="8" r="1.5" />
+      </svg>
+    ),
     inspector: (
       <svg width={s} height={s} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity }}>
         <circle cx="7" cy="7" r="4.5" />

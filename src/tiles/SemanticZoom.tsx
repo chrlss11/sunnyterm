@@ -68,7 +68,9 @@ function getNonTerminalDetail(tile: Tile): string {
     case 'lens':
       return 'Lens'
     case 'docker':
-      return 'Docker Topology'
+      return 'Docker'
+    case 'k8s':
+      return 'Kubernetes'
     case 'chart':
       return 'Chart'
     case 'inspector':

@@ -429,7 +429,7 @@ export const useStore = create<CanvasStore>()(
         w: tileW,
         h: tileH,
         name: (() => {
-          const base = kind === 'terminal' ? 'Terminal' : kind === 'http' ? 'HTTP' : kind === 'postgres' ? 'PostgreSQL' : kind === 'file' ? 'Files' : kind === 'lens' ? 'Lens' : kind === 'chart' ? 'Chart' : kind === 'docker' ? 'Docker' : kind === 'inspector' ? 'Inspector' : 'Browser'
+          const base = kind === 'terminal' ? 'Terminal' : kind === 'http' ? 'HTTP' : kind === 'postgres' ? 'PostgreSQL' : kind === 'file' ? 'Files' : kind === 'lens' ? 'Lens' : kind === 'chart' ? 'Chart' : kind === 'docker' ? 'Docker' : kind === 'k8s' ? 'Kubernetes' : kind === 'inspector' ? 'Inspector' : 'Browser'
           const count = tiles.filter((t) => t.kind === kind).length + 1
           return `${base} ${count}`
         })(),

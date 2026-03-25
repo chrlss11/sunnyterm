@@ -261,8 +261,15 @@ function CanvasToolbar() {
           <button className={btn} onClick={() => spawnTile('lens')} title="New Lens (filtered view)">
             <Search size={ico} />
           </button>
-          <button className={btn} onClick={() => spawnTile('docker')} title="New Docker Topology">
+          <button className={btn} onClick={() => spawnTile('docker')} title="Docker">
             <Container size={ico} />
+          </button>
+          <button className={btn} onClick={() => spawnTile('k8s')} title="Kubernetes">
+            <svg width={ico} height={ico} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="8" cy="8" r="5.5" />
+              <path d="M8 2.5v3M8 10.5v3M2.5 8h3M10.5 8h3" />
+              <circle cx="8" cy="8" r="1.5" />
+            </svg>
           </button>
 
           <div className={sep} />

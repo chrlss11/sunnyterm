@@ -789,49 +789,11 @@ function PodCard({ pod, onClick, onLogsClick }: {
 // ─── DockerTile (Container Tile) ────────────────────────────────────────────
 
 export function DockerTile({ tileId }: Props) {
-  const [activeTab, setActiveTab] = useState<ContainerTab>('docker')
   const { spawnTile } = useStore()
+  return <DockerTab spawnTile={spawnTile} />
+}
 
-  return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Tab bar */}
-      <div className="flex shrink-0 border-b border-border" style={{ background: 'var(--titlebar)' }}>
-        <button
-          className={`px-4 py-1.5 text-xs font-medium transition-colors relative ${
-            activeTab === 'docker'
-              ? 'text-text-primary'
-              : 'text-text-muted hover:text-text-secondary'
-          }`}
-          onClick={() => setActiveTab('docker')}
-        >
-          Docker
-          {activeTab === 'docker' && (
-            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400 rounded-t" />
-          )}
-        </button>
-        <button
-          className={`px-4 py-1.5 text-xs font-medium transition-colors relative ${
-            activeTab === 'kubernetes'
-              ? 'text-text-primary'
-              : 'text-text-muted hover:text-text-secondary'
-          }`}
-          onClick={() => setActiveTab('kubernetes')}
-        >
-          Kubernetes
-          {activeTab === 'kubernetes' && (
-            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400 rounded-t" />
-          )}
-        </button>
-      </div>
-
-      {/* Tab content */}
-      <div className="flex-1 overflow-hidden relative">
-        {activeTab === 'docker' ? (
-          <DockerTab spawnTile={spawnTile} />
-        ) : (
-          <KubernetesTab spawnTile={spawnTile} />
-        )}
-      </div>
-    </div>
-  )
+export function K8sTile({ tileId }: { tileId: string }) {
+  const { spawnTile } = useStore()
+  return <KubernetesTab spawnTile={spawnTile} />
 }

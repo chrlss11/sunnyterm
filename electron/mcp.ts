@@ -119,7 +119,7 @@ export function startMcpServer(getWindow: () => BrowserWindow | null, ptyManager
     'create_tile',
     'Create a new tile on the canvas',
     {
-      kind: z.enum(['terminal', 'http', 'postgres', 'browser', 'file', 'lens']).describe('Tile type'),
+      kind: z.enum(['terminal', 'http', 'postgres', 'browser', 'file', 'lens', 'docker', 'k8s', 'inspector']).describe('Tile type'),
       x: z.number().optional().describe('X position (auto if omitted)'),
       y: z.number().optional().describe('Y position (auto if omitted)'),
       name: z.string().optional().describe('Tile name'),

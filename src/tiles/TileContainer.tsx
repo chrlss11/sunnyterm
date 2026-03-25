@@ -6,7 +6,7 @@ import { PostgresTile } from './PostgresTile'
 import { BrowserTile } from './BrowserTile'
 import { FileViewerTile, resetFileViewerState } from './FileViewerTile'
 import { LensTile } from './LensTile'
-import { DockerTile } from './DockerTile'
+import { DockerTile, K8sTile } from './DockerTile'
 import { ChartTile } from './ChartTile'
 import { InspectorTile } from './InspectorTile'
 import { Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, MoreHorizontal, Terminal, BarChart3, Minus, Plus } from 'lucide-react'
@@ -295,6 +295,7 @@ export function TileContainer({ tile, isSelected }: Props) {
               {tile.kind === 'file' && <FileViewerTile tileId={tile.id} />}
               {tile.kind === 'lens' && <LensTile tileId={tile.id} />}
               {tile.kind === 'docker' && <DockerTile tileId={tile.id} />}
+              {tile.kind === 'k8s' && <K8sTile tileId={tile.id} />}
               {tile.kind === 'chart' && <ChartTile tileId={tile.id} />}
               {tile.kind === 'inspector' && <InspectorTile tileId={tile.id} />}
             </TileErrorBoundary>
