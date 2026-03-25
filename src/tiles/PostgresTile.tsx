@@ -339,6 +339,44 @@ export function PostgresTile({ tileId }: { tileId: string }) {
     runQuery(q)
   }
 
+  // ── Script generation ───────────────────────────────────────────────────────
+  const generateCreateScript = (schema: string, table: string, columns: TreeNode[]): string => {
+    const cols = columns.map(c =>
+      `  ${c.name} ${c.dataType || 'unknown'}${c.isNullable === 'NO' ? ' NOT NULL' : ''}`
+    ).join(',\n')
+    return `CREATE TABLE ${schema}.${table} (\n${cols}\n);`
+  }
+
+  const generateInsertTemplate = (schema: string, table: string, columns: TreeNode[]): string => {
+    const names = columns.map(c => c.name).join(', ')
+    const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ')
+    return `INSERT INTO ${schema}.${table} (${names})\nVALUES (${placeholders});`
+  }
+
+  const handleTableAction = async (action: 'select' | 'create' | 'insert' | 'count', schemaName: string, tableName: string, columns?: TreeNode[]) => {
+    if (action === 'select') {
+      const q = `SELECT * FROM ${schemaName}.${tableName} LIMIT 100;`
+      setSql(q)
+      runQuery(q)
+    } else if (action === 'count') {
+      const q = `SELECT COUNT(*) FROM ${schemaName}.${tableName};`
+      setSql(q)
+      runQuery(q)
+    } else if (action === 'create' && columns && columns.length > 0) {
+      setSql(generateCreateScript(schemaName, tableName, columns))
+    } else if (action === 'insert' && columns && columns.length > 0) {
+      setSql(generateInsertTemplate(schemaName, tableName, columns))
+    } else if ((action === 'create' || action === 'insert') && (!columns || columns.length === 0)) {
+      // Need to load columns first
+      const cols = await loadColumns(schemaName, tableName)
+      if (action === 'create') {
+        setSql(generateCreateScript(schemaName, tableName, cols))
+      } else {
+        setSql(generateInsertTemplate(schemaName, tableName, cols))
+      }
+    }
+  }
+
   const handleDatabaseClick = async (dbName: string) => {
     if (dbName === config.database) return
     await disconnect()
@@ -547,6 +585,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
                   onExpandColumns={expandTableColumns}
                   onTableClick={handleTableClick}
                   onDatabaseClick={handleDatabaseClick}
+                  onTableAction={handleTableAction}
                   currentDb={config.database}
                 />
               ))}
@@ -687,6 +726,7 @@ function SchemaTreeNode({
   onExpandColumns,
   onTableClick,
   onDatabaseClick,
+  onTableAction,
   currentDb
 }: {
   node: TreeNode
@@ -696,8 +736,10 @@ function SchemaTreeNode({
   onExpandColumns: (path: number[], schema: string, table: string) => void
   onTableClick: (schema: string, table: string) => void
   onDatabaseClick: (db: string) => void
+  onTableAction: (action: 'select' | 'create' | 'insert' | 'count', schema: string, table: string, columns?: TreeNode[]) => void
   currentDb: string
 }) {
+  const [showActions, setShowActions] = useState(false)
   const hasChildren = node.children && node.children.length > 0
   const isExpandable = node.type === 'database' || node.type === 'schema' || node.type === 'table-group' || node.type === 'view-group' || node.type === 'table'
   const paddingLeft = 8 + depth * 14
@@ -729,6 +771,14 @@ function SchemaTreeNode({
     }
   }
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if ((node.type === 'table' || node.type === 'view') && node.schema) {
+      e.preventDefault()
+      e.stopPropagation()
+      setShowActions(prev => !prev)
+    }
+  }
+
   const icon = () => {
     switch (node.type) {
       case 'database':
@@ -757,7 +807,8 @@ function SchemaTreeNode({
         style={{ paddingLeft }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
-        title={node.type === 'table' || node.type === 'view' ? 'Double-click to query' : undefined}
+        onContextMenu={handleContextMenu}
+        title={node.type === 'table' || node.type === 'view' ? 'Double-click to query, right-click for actions' : undefined}
       >
         {isExpandable ? (
           node.loading ? (
@@ -780,20 +831,58 @@ function SchemaTreeNode({
         }`}>
           {node.name}
           {node.type === 'column' && node.dataType && (
-            <span className="text-text-muted ml-1 text-[9px]">{node.dataType}</span>
+            <span className="text-text-muted ml-1 text-[9px]">
+              {node.dataType}{node.isNullable === 'NO' ? ' NOT NULL' : ''}
+            </span>
+          )}
+          {node.type === 'database' && node.name === currentDb && (
+            <span className="text-[8px] text-blue-400/60 ml-1">(current)</span>
           )}
         </span>
         {node.type === 'table-group' && node.children && (
-          <span className="text-[9px] text-text-muted ml-auto mr-2 opacity-0 group-hover:opacity-100">
-            {node.children.length}
+          <span className="text-[9px] text-text-muted ml-auto mr-2">
+            ({node.children.length})
           </span>
         )}
         {node.type === 'view-group' && node.children && (
-          <span className="text-[9px] text-text-muted ml-auto mr-2 opacity-0 group-hover:opacity-100">
-            {node.children.length}
+          <span className="text-[9px] text-text-muted ml-auto mr-2">
+            ({node.children.length})
           </span>
         )}
       </div>
+
+      {/* Table/View action buttons (shown on right-click) */}
+      {showActions && (node.type === 'table' || node.type === 'view') && node.schema && (
+        <div
+          className="flex items-center gap-1 py-1 bg-white/[0.04] border-y border-border"
+          style={{ paddingLeft: paddingLeft + 18 }}
+        >
+          <button
+            className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 transition-colors"
+            onClick={(e) => { e.stopPropagation(); onTableAction('select', node.schema!, node.name, node.children); setShowActions(false) }}
+          >
+            SELECT
+          </button>
+          <button
+            className="text-[9px] px-1.5 py-0.5 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 transition-colors"
+            onClick={(e) => { e.stopPropagation(); onTableAction('create', node.schema!, node.name, node.children); setShowActions(false) }}
+          >
+            CREATE
+          </button>
+          <button
+            className="text-[9px] px-1.5 py-0.5 rounded bg-green-600/20 hover:bg-green-600/40 text-green-300 transition-colors"
+            onClick={(e) => { e.stopPropagation(); onTableAction('insert', node.schema!, node.name, node.children); setShowActions(false) }}
+          >
+            INSERT
+          </button>
+          <button
+            className="text-[9px] px-1.5 py-0.5 rounded bg-orange-600/20 hover:bg-orange-600/40 text-orange-300 transition-colors"
+            onClick={(e) => { e.stopPropagation(); onTableAction('count', node.schema!, node.name); setShowActions(false) }}
+          >
+            COUNT
+          </button>
+        </div>
+      )}
 
       {node.expanded && node.children && node.children.map((child, i) => (
         <SchemaTreeNode
@@ -805,6 +894,7 @@ function SchemaTreeNode({
           onExpandColumns={onExpandColumns}
           onTableClick={onTableClick}
           onDatabaseClick={onDatabaseClick}
+          onTableAction={onTableAction}
           currentDb={currentDb}
         />
       ))}

@@ -296,11 +296,21 @@ function KubernetesTab({ spawnTile }: { spawnTile: (kind: 'terminal') => { id: s
   const [pods, setPods] = useState<K8sPod[]>([])
   const [expandedDeployment, setExpandedDeployment] = useState<string | null>(null)
   const [deploymentPods, setDeploymentPods] = useState<K8sPod[]>([])
-  const [logsModal, setLogsModal] = useState<{ name: string; logs: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const logsEndRef = useRef<HTMLPreElement>(null)
+
+  // Inline log viewer state
+  const [logView, setLogView] = useState<{
+    name: string
+    namespace: string
+    type: 'pod' | 'deployment'
+    logs: string
+    loading: boolean
+  } | null>(null)
+  const [logFollow, setLogFollow] = useState(false)
+  const logContainerRef = useRef<HTMLPreElement>(null)
+  const logFollowRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Fetch contexts and current context
   const fetchContexts = useCallback(async () => {
@@ -414,12 +424,50 @@ function KubernetesTab({ spawnTile }: { spawnTile: (kind: 'terminal') => { id: s
     })
   }, [expandedDeployment, deployments, selectedNamespace])
 
-  // Scroll logs to bottom
+  // Scroll inline log viewer to bottom when logs change
   useEffect(() => {
-    if (logsModal && logsEndRef.current) {
-      logsEndRef.current.scrollTop = logsEndRef.current.scrollHeight
+    if (logView && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
     }
-  }, [logsModal])
+  }, [logView?.logs])
+
+  // Follow mode: auto-refresh logs every 3s
+  useEffect(() => {
+    if (logFollow && logView) {
+      logFollowRef.current = setInterval(() => {
+        fetchLogsInline(logView.namespace, logView.name, logView.type, false)
+      }, 3000)
+    }
+    return () => {
+      if (logFollowRef.current) {
+        clearInterval(logFollowRef.current)
+        logFollowRef.current = null
+      }
+    }
+  }, [logFollow, logView?.name, logView?.namespace, logView?.type]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stop follow when closing log view
+  const closeLogView = useCallback(() => {
+    setLogView(null)
+    setLogFollow(false)
+  }, [])
+
+  const fetchLogsInline = useCallback(async (namespace: string, name: string, type: 'pod' | 'deployment', showLoading = true) => {
+    if (showLoading) {
+      setLogView({ name, namespace, type, logs: '', loading: true })
+    }
+    try {
+      const result = type === 'pod'
+        ? await window.electronAPI.k8sLogs(namespace, name, 500)
+        : await window.electronAPI.k8sDeploymentLogs(namespace, name, 500)
+      const logs = result.ok && result.logs != null
+        ? result.logs
+        : result.error ?? 'Failed to fetch logs'
+      setLogView(prev => prev ? { ...prev, logs, loading: false } : null)
+    } catch (err) {
+      setLogView(prev => prev ? { ...prev, logs: (err as Error).message, loading: false } : null)
+    }
+  }, [])
 
   const handlePodClick = useCallback((podName: string) => {
     const newTile = spawnTile('terminal')
@@ -430,31 +478,13 @@ function KubernetesTab({ spawnTile }: { spawnTile: (kind: 'terminal') => { id: s
 
   const handlePodLogs = useCallback(async (e: React.MouseEvent, podName: string) => {
     e.stopPropagation()
-    try {
-      const result = await window.electronAPI.k8sLogs(selectedNamespace, podName)
-      if (result.ok && result.logs != null) {
-        setLogsModal({ name: podName, logs: result.logs })
-      } else {
-        setLogsModal({ name: podName, logs: result.error ?? 'Failed to fetch logs' })
-      }
-    } catch (err) {
-      setLogsModal({ name: podName, logs: (err as Error).message })
-    }
-  }, [selectedNamespace])
+    fetchLogsInline(selectedNamespace, podName, 'pod')
+  }, [selectedNamespace, fetchLogsInline])
 
   const handleDeploymentLogs = useCallback(async (e: React.MouseEvent, deploymentName: string) => {
     e.stopPropagation()
-    try {
-      const result = await window.electronAPI.k8sDeploymentLogs(selectedNamespace, deploymentName)
-      if (result.ok && result.logs != null) {
-        setLogsModal({ name: `deployment/${deploymentName}`, logs: result.logs })
-      } else {
-        setLogsModal({ name: `deployment/${deploymentName}`, logs: result.error ?? 'Failed to fetch logs' })
-      }
-    } catch (err) {
-      setLogsModal({ name: `deployment/${deploymentName}`, logs: (err as Error).message })
-    }
-  }, [selectedNamespace])
+    fetchLogsInline(selectedNamespace, deploymentName, 'deployment')
+  }, [selectedNamespace, fetchLogsInline])
 
   if (loading) {
     return (
@@ -526,140 +556,166 @@ function KubernetesTab({ spawnTile }: { spawnTile: (kind: 'terminal') => { id: s
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto p-2" style={{ scrollbarWidth: 'thin' }}>
-        {/* Deployments section */}
-        {deployments.length > 0 && (
-          <div className="mb-3">
-            <div className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5 px-1">
-              Deployments ({deployments.length})
-            </div>
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-              {deployments.map((dep) => {
-                const isHealthy = dep.ready === dep.replicas && dep.replicas > 0
-                const borderColor = isHealthy ? '#22c55e' : dep.ready > 0 ? '#eab308' : '#ef4444'
-                const isExpanded = expandedDeployment === dep.name
-
-                return (
-                  <div key={dep.name}>
-                    <div
-                      className="rounded-lg p-2.5 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
-                      style={{
-                        background: 'var(--surface)',
-                        border: `1.5px solid ${borderColor}40`,
-                        borderLeftWidth: 3,
-                        borderLeftColor: borderColor,
-                      }}
-                      onClick={() => setExpandedDeployment(isExpanded ? null : dep.name)}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-text-primary truncate">{dep.name}</span>
-                        <span
-                          className="text-[10px] font-mono px-1.5 py-0.5 rounded"
-                          style={{
-                            backgroundColor: `${borderColor}20`,
-                            color: borderColor,
-                          }}
-                        >
-                          {dep.ready}/{dep.replicas}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-text-muted font-mono truncate mb-1">
-                        {truncateImage(dep.image, 40)}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <button
-                          className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/15 text-text-muted hover:text-text-secondary transition-colors"
-                          onClick={(e) => handleDeploymentLogs(e, dep.name)}
-                        >
-                          View All Logs
-                        </button>
-                        <span className="text-[9px] text-text-muted/50">
-                          {isExpanded ? 'Click to collapse' : 'Click to expand pods'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Expanded: show deployment's pods */}
-                    {isExpanded && deploymentPods.length > 0 && (
-                      <div className="mt-1 ml-3 flex flex-col gap-1">
-                        {deploymentPods.map(pod => (
-                          <PodCard
-                            key={pod.name}
-                            pod={pod}
-                            onClick={() => handlePodClick(pod.name)}
-                            onLogsClick={(e) => handlePodLogs(e, pod.name)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {isExpanded && deploymentPods.length === 0 && (
-                      <div className="mt-1 ml-3 text-[10px] text-text-muted/50 py-1">
-                        No pods found for this deployment
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Pods section */}
-        {pods.length > 0 && (
-          <div>
-            <div className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5 px-1">
-              All Pods ({pods.length})
-            </div>
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-              {pods.map((pod) => (
-                <PodCard
-                  key={pod.name}
-                  pod={pod}
-                  onClick={() => handlePodClick(pod.name)}
-                  onLogsClick={(e) => handlePodLogs(e, pod.name)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {deployments.length === 0 && pods.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-center py-8">
-            <p className="text-text-muted text-xs">No resources found in namespace "{selectedNamespace}"</p>
-          </div>
-        )}
-      </div>
-
-      {/* Logs modal */}
-      {logsModal && (
-        <div
-          className="absolute inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={() => setLogsModal(null)}
-        >
-          <div
-            className="w-[90%] h-[85%] bg-tile border border-border rounded-lg flex flex-col overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
-              <span className="text-xs font-medium text-text-primary">
-                Logs: {logsModal.name}
+      {/* Content: inline log viewer OR resource list */}
+      {logView ? (
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {/* Log viewer header */}
+          <div className="flex items-center gap-2 px-3 py-1.5 shrink-0 border-b border-border bg-black/20">
+            <span className="text-[10px] text-text-muted">
+              {logView.type === 'deployment' ? 'deployment/' : ''}
+              <span className="text-text-primary font-medium">{logView.name}</span>
+            </span>
+            <span className="text-[9px] text-text-muted/60">ns: {logView.namespace}</span>
+            {logView.logs && !logView.loading && (
+              <span className="text-[9px] text-text-muted/50">
+                {logView.logs.split('\n').filter(Boolean).length} lines
               </span>
+            )}
+            <div className="ml-auto flex items-center gap-1.5">
               <button
-                className="text-text-muted hover:text-text-primary text-sm"
-                onClick={() => setLogsModal(null)}
+                className={`text-[9px] px-2 py-0.5 rounded transition-colors ${
+                  logFollow
+                    ? 'bg-green-600/40 text-green-300'
+                    : 'bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-secondary'
+                }`}
+                onClick={() => setLogFollow(f => !f)}
+                title={logFollow ? 'Stop following' : 'Follow logs (auto-refresh every 3s)'}
               >
-                x
+                {logFollow ? 'Following...' : 'Follow'}
+              </button>
+              <button
+                className="text-[9px] px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-secondary transition-colors"
+                onClick={() => fetchLogsInline(logView.namespace, logView.name, logView.type, false)}
+              >
+                Refresh
+              </button>
+              <button
+                className="text-[9px] px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-text-muted hover:text-red-300 transition-colors"
+                onClick={closeLogView}
+              >
+                Close
               </button>
             </div>
+          </div>
+
+          {/* Log content */}
+          {logView.loading ? (
+            <div className="flex-1 flex items-center justify-center text-text-muted text-xs">
+              Loading logs...
+            </div>
+          ) : (
             <pre
-              ref={logsEndRef}
-              className="flex-1 overflow-auto p-3 text-[11px] font-mono text-text-secondary whitespace-pre-wrap"
+              ref={logContainerRef}
+              className="flex-1 overflow-auto p-3 text-[11px] font-mono text-text-secondary whitespace-pre-wrap bg-black/30"
               style={{ scrollbarWidth: 'thin' }}
             >
-              {logsModal.logs}
+              {logView.logs || 'No logs available'}
             </pre>
-          </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto p-2" style={{ scrollbarWidth: 'thin' }}>
+          {/* Deployments section */}
+          {deployments.length > 0 && (
+            <div className="mb-3">
+              <div className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5 px-1">
+                Deployments ({deployments.length})
+              </div>
+              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+                {deployments.map((dep) => {
+                  const isHealthy = dep.ready === dep.replicas && dep.replicas > 0
+                  const borderColor = isHealthy ? '#22c55e' : dep.ready > 0 ? '#eab308' : '#ef4444'
+                  const isExpanded = expandedDeployment === dep.name
+
+                  return (
+                    <div key={dep.name}>
+                      <div
+                        className="rounded-lg p-2.5 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+                        style={{
+                          background: 'var(--surface)',
+                          border: `1.5px solid ${borderColor}40`,
+                          borderLeftWidth: 3,
+                          borderLeftColor: borderColor,
+                        }}
+                        onClick={() => setExpandedDeployment(isExpanded ? null : dep.name)}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-text-primary truncate">{dep.name}</span>
+                          <span
+                            className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                            style={{
+                              backgroundColor: `${borderColor}20`,
+                              color: borderColor,
+                            }}
+                          >
+                            {dep.ready}/{dep.replicas}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-text-muted font-mono truncate mb-1">
+                          {truncateImage(dep.image, 40)}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <button
+                            className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/15 text-text-muted hover:text-text-secondary transition-colors"
+                            onClick={(e) => handleDeploymentLogs(e, dep.name)}
+                          >
+                            View All Logs
+                          </button>
+                          <span className="text-[9px] text-text-muted/50">
+                            {isExpanded ? 'Click to collapse' : 'Click to expand pods'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Expanded: show deployment's pods */}
+                      {isExpanded && deploymentPods.length > 0 && (
+                        <div className="mt-1 ml-3 flex flex-col gap-1">
+                          {deploymentPods.map(pod => (
+                            <PodCard
+                              key={pod.name}
+                              pod={pod}
+                              onClick={() => handlePodClick(pod.name)}
+                              onLogsClick={(e) => handlePodLogs(e, pod.name)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {isExpanded && deploymentPods.length === 0 && (
+                        <div className="mt-1 ml-3 text-[10px] text-text-muted/50 py-1">
+                          No pods found for this deployment
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Pods section */}
+          {pods.length > 0 && (
+            <div>
+              <div className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5 px-1">
+                All Pods ({pods.length})
+              </div>
+              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+                {pods.map((pod) => (
+                  <PodCard
+                    key={pod.name}
+                    pod={pod}
+                    onClick={() => handlePodClick(pod.name)}
+                    onLogsClick={(e) => handlePodLogs(e, pod.name)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {deployments.length === 0 && pods.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-center py-8">
+              <p className="text-text-muted text-xs">No resources found in namespace "{selectedNamespace}"</p>
+            </div>
+          )}
         </div>
       )}
     </div>

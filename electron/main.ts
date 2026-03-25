@@ -474,6 +474,16 @@ ipcMain.handle('docker:logs', async (_event, containerId: string) => {
 
 // ─── Kubernetes IPC handlers ──────────────────────────────────────────────────
 
+/** Sanitize k8s resource names to prevent command injection */
+function sanitizeK8sName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9\-._]/g, '')
+}
+
+/** Sanitize k8s label selectors (allows =, comma in addition to name chars) */
+function sanitizeK8sSelector(selector: string): string {
+  return selector.replace(/[^a-zA-Z0-9\-._=,/]/g, '')
+}
+
 ipcMain.handle('k8s:contexts', async () => {
   try {
     const { execSync } = require('child_process')
@@ -500,8 +510,9 @@ ipcMain.handle('k8s:namespaces', async () => {
 
 ipcMain.handle('k8s:deployments', async (_event, namespace: string) => {
   try {
+    const ns = sanitizeK8sName(namespace)
     const { execSync } = require('child_process')
-    const output = execSync(`kubectl get deployments -n ${namespace} -o json`, { timeout: 10000 }).toString()
+    const output = execSync(`kubectl get deployments -n ${ns} -o json`, { timeout: 10000 }).toString()
     const data = JSON.parse(output)
     return { ok: true, deployments: data.items.map((d: any) => ({
       name: d.metadata.name,
@@ -516,9 +527,10 @@ ipcMain.handle('k8s:deployments', async (_event, namespace: string) => {
 
 ipcMain.handle('k8s:pods', async (_event, namespace: string, labelSelector?: string) => {
   try {
+    const ns = sanitizeK8sName(namespace)
     const { execSync } = require('child_process')
-    const selectorFlag = labelSelector ? ` -l ${labelSelector}` : ''
-    const output = execSync(`kubectl get pods -n ${namespace}${selectorFlag} -o json`, { timeout: 10000 }).toString()
+    const selectorFlag = labelSelector ? ` -l ${sanitizeK8sSelector(labelSelector)}` : ''
+    const output = execSync(`kubectl get pods -n ${ns}${selectorFlag} -o json`, { timeout: 10000 }).toString()
     const data = JSON.parse(output)
     return { ok: true, pods: data.items.map((p: any) => ({
       name: p.metadata.name,
@@ -534,16 +546,22 @@ ipcMain.handle('k8s:pods', async (_event, namespace: string, labelSelector?: str
 
 ipcMain.handle('k8s:logs', async (_event, namespace: string, podName: string, lines?: number) => {
   try {
+    const ns = sanitizeK8sName(namespace)
+    const pod = sanitizeK8sName(podName)
+    const tail = Math.max(1, Math.min(Number(lines) || 100, 10000))
     const { execSync } = require('child_process')
-    const output = execSync(`kubectl logs ${podName} -n ${namespace} --tail=${lines ?? 100}`, { timeout: 10000 }).toString()
+    const output = execSync(`kubectl logs ${pod} -n ${ns} --tail=${tail}`, { timeout: 10000 }).toString()
     return { ok: true, logs: output }
   } catch (err) { return { ok: false, error: (err as Error).message } }
 })
 
 ipcMain.handle('k8s:deploymentLogs', async (_event, namespace: string, deploymentName: string, lines?: number) => {
   try {
+    const ns = sanitizeK8sName(namespace)
+    const dep = sanitizeK8sName(deploymentName)
+    const tail = Math.max(1, Math.min(Number(lines) || 100, 10000))
     const { execSync } = require('child_process')
-    const output = execSync(`kubectl logs deployment/${deploymentName} -n ${namespace} --tail=${lines ?? 100} --all-containers`, { timeout: 15000 }).toString()
+    const output = execSync(`kubectl logs deployment/${dep} -n ${ns} --tail=${tail} --all-containers`, { timeout: 15000 }).toString()
     return { ok: true, logs: output }
   } catch (err) { return { ok: false, error: (err as Error).message } }
 })
