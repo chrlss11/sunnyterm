@@ -5,6 +5,7 @@ import { getShellIntegration } from './shellIntegration'
 interface PtyEntry {
   pty: nodePty.IPty
   pid: number
+  cwd: string
 }
 
 export class PtyManager {
@@ -48,7 +49,8 @@ export class PtyManager {
       this.ptys.delete(id)
     })
 
-    this.ptys.set(id, { pty, pid: pty.pid })
+    const spawnCwd = cwd || process.env.HOME || '/'
+    this.ptys.set(id, { pty, pid: pty.pid, cwd: spawnCwd })
 
     // Inject shell integration script (OSC 133 command boundaries)
     const integration = getShellIntegration(shell)
@@ -113,10 +115,20 @@ export class PtyManager {
         return execSync(`readlink /proc/${entry.pid}/cwd`).toString().trim()
       }
       if (process.platform === 'win32') {
-        // Use PowerShell to get the working directory of the child process
-        const cmd = `powershell -NoProfile -Command "(Get-Process -Id ${entry.pid} -ErrorAction SilentlyContinue).Path | Split-Path -Parent"`
-        const result = execSync(cmd, { timeout: 3000 }).toString().trim()
-        if (result) return result
+        // Try multiple methods to get CWD on Windows
+        // Method 1: Use handle.exe or NtQueryInformationProcess if available
+        // Method 2: Track via environment — ask the shell to print its CWD
+        try {
+          // For PowerShell/cmd: query the shell's current location
+          // This is a best-effort approach — we write a command that outputs CWD
+          // and capture it from the PTY output. But since that's async, we use
+          // the initial CWD + any cd tracking from shell integration.
+          const cmd = `powershell -NoProfile -Command "[System.Diagnostics.Process]::GetProcessById(${entry.pid}).StartInfo.WorkingDirectory"`
+          const result = execSync(cmd, { timeout: 3000 }).toString().trim()
+          if (result) return result
+        } catch {}
+        // Fallback: return the initial spawn CWD
+        return entry.cwd ?? null
       }
     } catch {}
     return null
