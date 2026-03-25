@@ -109,6 +109,12 @@ export function useKeyboard() {
 
       if (!meta) return
 
+      // On Windows/Linux: let Ctrl+C/V/X/A pass through for clipboard operations
+      if (!isMac) {
+        const k = e.key.toLowerCase()
+        if (k === 'c' || k === 'v' || k === 'x' || k === 'a') return
+      }
+
       // Cmd+1-9: switch workspace by index
       const digit = parseInt(e.key, 10)
       if (!isNaN(digit) && digit >= 1 && digit <= 9) {

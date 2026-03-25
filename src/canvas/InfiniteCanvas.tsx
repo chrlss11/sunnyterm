@@ -127,14 +127,14 @@ export function InfiniteCanvas() {
         setShowPalette(true)
         return
       }
-      // Space OR Ctrl to enter pan mode (like Figma)
-      if ((e.code === 'Space' && e.target === document.body) || e.code === 'ControlLeft' || e.code === 'ControlRight') {
+      // Space to enter pan mode (hold Space + drag to pan)
+      if (e.code === 'Space' && e.target === document.body) {
         spaceHeld.current = true
         if (containerRef.current) containerRef.current.style.cursor = 'grab'
       }
     }
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
+      if (e.code === 'Space') {
         spaceHeld.current = false
         if (containerRef.current) containerRef.current.style.cursor = 'default'
       }
@@ -315,6 +315,9 @@ export function InfiniteCanvas() {
   const onWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
       if (useStore.getState().viewMode === 'focus') return
+      // If the scroll target is inside a tile content area (xterm, scrollable div), let it scroll naturally
+      const target = e.target as HTMLElement
+      if (target.closest('.xterm-viewport') || target.closest('[data-tile-scroll]')) return
       e.preventDefault()
       if (e.metaKey || e.ctrlKey) {
         // Pinch-to-zoom (ctrlKey) or Cmd+scroll (metaKey):
