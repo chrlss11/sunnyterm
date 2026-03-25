@@ -420,15 +420,26 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     }
   }, [theme])
 
-  // ── Sync per-tile font size ─────────────────────────────────────────────
+  // ── Adaptive font size: larger in focus mode, normal in canvas ──────────
+  const viewMode = useStore((s) => s.viewMode)
+
   useEffect(() => {
     const term = termRef.current
-    if (!term) return
-    const fs = tile?.fontSize ?? 13
+    if (!term || !tile) return
+    const baseFontSize = tile.fontSize ?? 13
+    let fs: number
+    if (overrideW && overrideH) {
+      // Focus mode: scale font up based on how much bigger the view is
+      const ratio = Math.min(overrideW / tile.w, overrideH / tile.h)
+      fs = Math.round(Math.min(baseFontSize * Math.max(ratio * 0.85, 1), 24))
+    } else {
+      fs = baseFontSize
+    }
     if (term.options.fontSize !== fs) {
       term.options.fontSize = fs
+      try { fitAddonRef.current?.fit() } catch {}
     }
-  }, [tile?.fontSize])
+  }, [tile?.fontSize, viewMode, overrideW, overrideH, tile?.w, tile?.h])
 
   // ── Fit terminal to tile dimensions ──────────────────────────────────────
   // Uses tile.w/tile.h directly instead of DOM measurements to avoid
