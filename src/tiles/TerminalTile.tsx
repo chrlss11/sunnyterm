@@ -284,9 +284,6 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
 
       let items: CompletionItem[] = []
 
-      // 1. Try command/subcommand/flag completions first
-      const cmdItems = await window.electronAPI.completeCommand(tokens) as CompletionItem[]
-
       if (needsBranch && tokens.length >= 3) {
         // Git branch/tag completion
         const partial = tokens[tokens.length - 1] || ''
@@ -298,34 +295,12 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
       } else if (isGitCmd && gitSub === 'remote' && tokens.length >= 3) {
         const partial = tokens[tokens.length - 1] || ''
         items = await window.electronAPI.completeGit(tileId, 'remote', partial) as CompletionItem[]
-      } else if (cmdItems.length > 0) {
-        // Use command database completions
-        items = cmdItems
-      } else if (lastToken.startsWith('-')) {
-        // Flag typed but no command match — skip path completion
-        items = []
       } else {
         // Path completion for the last token
         items = await window.electronAPI.completePath(tileId, lastToken) as CompletionItem[]
       }
 
-      // Mix in history-based suggestions for single-token input
-      if (tokens.length === 1 && lastToken) {
-        const historyMatch = findMatch(lastToken)
-        if (historyMatch) {
-          const alreadyPresent = items.some((it) => it.value === historyMatch)
-          if (!alreadyPresent) {
-            items.unshift({
-              value: historyMatch,
-              label: historyMatch,
-              kind: 'command' as CompletionItem['kind'],
-              description: 'From history'
-            })
-          }
-        }
-      }
-
-      if (items.length === 1 && items[0].kind !== 'command' && items[0].kind !== 'subcommand' && items[0].kind !== 'flag') {
+      if (items.length === 1) {
         // Single match for path/branch: insert directly
         const completed = items[0].value
         const suffix = completed.slice(lastToken.split('/').pop()?.length || 0)
@@ -365,48 +340,12 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
       return null
     }
 
-    // Async ghost text: also query command database for suggestions
-    const renderGhostTextAsync = async (prefix: string) => {
-      if (!prefix) {
-        ghostRenderer.setGhostText(null)
-        return
-      }
-      // First try history (sync)
-      const historyMatch = findMatch(prefix)
-      if (historyMatch) {
-        const suffix = historyMatch.slice(prefix.length)
-        if (suffix) {
-          ghostRenderer.setGhostText(suffix)
-          return
-        }
-      }
-      // Then try command database (async)
-      try {
-        const cmdSuffix = await window.electronAPI.completeCommandGhost(prefix)
-        if (cmdSuffix) {
-          ghostRenderer.setGhostText(cmdSuffix)
-          return
-        }
-      } catch { /* ignore */ }
-      ghostRenderer.setGhostText(null)
-    }
-
     const interceptor = new InputInterceptor(term, {
       ptyWrite: (data) => window.electronAPI.ptyWrite(tileId, data),
       onCommandExecuted: (cmd) => addCommand(cmd),
       getSuggestion,
       renderGhostText: (text) => {
-        if (text === null) {
-          ghostRenderer.setGhostText(null)
-        } else {
-          ghostRenderer.setGhostText(text)
-        }
-        // Also trigger async command ghost when text changes
-        const buf = interceptor.getBuffer()
-        if (buf && !text) {
-          // No history match — try async command suggestion
-          renderGhostTextAsync(buf)
-        }
+        ghostRenderer.setGhostText(text)
       },
       requestCompletions,
       dismissCompletions: () => setCompletionItems([])
