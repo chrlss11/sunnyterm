@@ -154,6 +154,22 @@ export function PostgresTile({ tileId }: { tileId: string }) {
     window.electronAPI.getPlatform().then(setPlatform)
   }, [])
 
+  // Verify connection is still alive when restoring from cache
+  useEffect(() => {
+    if (cached?.status === 'connected') {
+      window.electronAPI.pgQuery(tileId, 'SELECT 1').then((res) => {
+        if (!res.ok) {
+          setStatus('disconnected')
+          setStatusMsg('Connection lost — reconnect')
+          setShowConnForm(true)
+        }
+      }).catch(() => {
+        setStatus('disconnected')
+        setShowConnForm(true)
+      })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const runMod = platform === 'darwin' ? '⌘' : 'Ctrl'
 
   // ── Config helpers ─────────────────────────────────────────────────────────
@@ -522,7 +538,7 @@ export function PostgresTile({ tileId }: { tileId: string }) {
       )}
 
       {/* Connection form */}
-      {showConnForm && status !== 'connected' && (
+      {showConnForm && (
         <div className="px-3 py-3 border-b border-border shrink-0 bg-white/[0.02]">
           {/* Saved connections dropdown */}
           {savedConns.length > 0 && (

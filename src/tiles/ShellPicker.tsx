@@ -108,11 +108,11 @@ export function ShellPicker() {
                 <button
                   className={`shrink-0 transition-all cursor-pointer ${
                     isDefault
-                      ? 'text-yellow-400 opacity-100'
-                      : 'text-text-muted opacity-0 group-hover:opacity-50 hover:!opacity-100'
+                      ? 'text-yellow-400'
+                      : 'text-text-muted opacity-40 hover:opacity-100'
                   }`}
                   onClick={(e) => handleSetDefault(shell, e)}
-                  title={isDefault ? 'Remove as default' : 'Set as default shell'}
+                  title={isDefault ? 'Quitar como default' : 'Usar como default (todas las terminales nuevas)'}
                 >
                   <Star size={12} fill={isDefault ? 'currentColor' : 'none'} />
                 </button>
@@ -120,11 +120,11 @@ export function ShellPicker() {
             )
           })}
 
-          {defaultShell && (
-            <div className="px-3 pt-1 pb-0.5 border-t text-[10px] text-text-muted" style={{ borderColor: 'var(--border)' }}>
-              Default: {shells.find((s) => s.path === defaultShell)?.name ?? 'Custom'}
-            </div>
-          )}
+          <div className="px-3 pt-1 pb-1 border-t text-[10px] text-text-muted" style={{ borderColor: 'var(--border)' }}>
+            {defaultShell
+              ? `Default: ${shells.find((s) => s.path === defaultShell)?.name ?? 'Custom'}`
+              : 'Click ★ para definir shell por defecto'}
+          </div>
         </div>
       )}
     </div>
