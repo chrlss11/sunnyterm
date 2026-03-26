@@ -68,8 +68,8 @@ export const THEMES: Record<ThemeName, ThemeDef> = {
     terminal: {
       background: '#1B1D1F',
       foreground: '#e0e0e0',
-      cursor: '#a0a0ff',
-      cursorAccent: '#1B1D1F',
+      cursor: '#60a5fa',
+      cursorAccent: '#000000',
       selectionBackground: '#4040a0',
       black: '#222426',
       red: '#ff5555',
@@ -109,7 +109,7 @@ export const THEMES: Record<ThemeName, ThemeDef> = {
     terminal: {
       background: '#ffffff',
       foreground: '#24292e',
-      cursor: '#586069',
+      cursor: '#2563eb',
       cursorAccent: '#ffffff',
       selectionBackground: '#c8d3e8',
       black: '#24292e',
