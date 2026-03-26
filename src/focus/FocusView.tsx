@@ -9,12 +9,13 @@ import { LensTile } from '../tiles/LensTile'
 import { DockerTile, K8sTile } from '../tiles/DockerTile'
 import { ChartTile } from '../tiles/ChartTile'
 import { InspectorTile } from '../tiles/InspectorTile'
-import { MoreHorizontal, Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, Minus, Plus, Layers } from 'lucide-react'
+import { MoreHorizontal, Pencil, Copy, RotateCcw, ClipboardCopy, Link, X, Minus, Plus, Layers, Pin } from 'lucide-react'
 import { TileKindIcon } from '../tiles/TileKindIcon'
 import type { Tile, TileKind, Section } from '../types'
 
 const TITLE_BAR_H = 36
 const TAB_BAR_H = 32
+const BREADCRUMB_H = 20
 
 /** Extract the creation timestamp from a tile ID like "tile-1710834569123-0" */
 function tileCreatedAt(tile: Tile): number {
@@ -63,13 +64,44 @@ export function FocusView() {
   const sections = useStore((s) => s.sections)
   const focusedId = useStore((s) => s.focusedId)
   const exitedTileIds = useStore((s) => s.exitedTileIds)
-  const { focusTile, spawnTile, removeTile } = useStore()
+  const pinnedTileIds = useStore((s) => s.pinnedTileIds)
+  const { focusTile, spawnTile, removeTile, pinTile, unpinTile } = useStore()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [showCreateMenu, setShowCreateMenu] = useState(false)
   const createMenuRef = useRef<HTMLDivElement>(null)
   const createBtnRef = useRef<HTMLButtonElement>(null)
   const [containerH, setContainerH] = useState(0)
   const [containerW, setContainerW] = useState(0)
+
+  // ── Split view state ──
+  const [splitTileId, setSplitTileId] = useState<string | null>(null)
+
+  // ── Tab right-click context menu ──
+  const [tabCtxMenu, setTabCtxMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
+  const tabCtxRef = useRef<HTMLDivElement>(null)
+
+  // Close tab context menu on outside click
+  useEffect(() => {
+    if (!tabCtxMenu) return
+    const handle = (e: MouseEvent) => {
+      if (tabCtxRef.current && !tabCtxRef.current.contains(e.target as Node)) {
+        setTabCtxMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [tabCtxMenu])
+
+  // ESC closes split view
+  useEffect(() => {
+    const handle = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && splitTileId) {
+        setSplitTileId(null)
+      }
+    }
+    window.addEventListener('keydown', handle)
+    return () => window.removeEventListener('keydown', handle)
+  }, [splitTileId])
 
   // Measure container
   useEffect(() => {
@@ -124,13 +156,19 @@ export function FocusView() {
     })
   }, [cacheKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sorted = tabOrder.map((id) => tiles.find((t) => t.id === id)!).filter(Boolean)
+  // Sort pinned tabs first, then unpinned in their tab order
+  const pinnedSet = new Set(pinnedTileIds)
+  const sortedRaw = tabOrder.map((id) => tiles.find((t) => t.id === id)!).filter(Boolean)
+  const sorted = [
+    ...sortedRaw.filter((t) => pinnedSet.has(t.id)),
+    ...sortedRaw.filter((t) => !pinnedSet.has(t.id)),
+  ]
 
   // Build focus entries (groups + singles)
   const focusEntries = buildFocusEntries(sorted, sections)
 
   const cardW = Math.round(containerW * 0.7)
-  const cardH = containerH - TAB_BAR_H
+  const cardH = containerH - TAB_BAR_H - BREADCRUMB_H
 
   // Find which entry is currently focused (contains the focusedId)
   const focusedEntryIdx = focusEntries.findIndex((e) =>
@@ -241,6 +279,30 @@ export function FocusView() {
     setDropTargetId(null)
   }, [])
 
+  // Clear split if the split tile is removed
+  useEffect(() => {
+    if (splitTileId && !tiles.find((t) => t.id === splitTileId)) {
+      setSplitTileId(null)
+    }
+  }, [tiles, splitTileId])
+
+  // Find the currently focused tile and split tile objects
+  const focusedTile = focusedId ? tiles.find((t) => t.id === focusedId) : null
+  const splitTile = splitTileId ? tiles.find((t) => t.id === splitTileId) : null
+  const isSplitActive = !!splitTile && splitTileId !== focusedId
+
+  // Compute pane widths for split
+  const splitCardW = isSplitActive ? Math.floor(containerW / 2) - 8 : cardW
+  const splitCardH = cardH
+
+  // Tab accent color by tile type
+  const tabAccent: Record<string, string> = {
+    terminal: '#22c55e', http: '#3b82f6', postgres: '#a855f7',
+    browser: '#f59e0b', file: '#6b7280', lens: '#ec4899',
+    docker: '#06b6d4', k8s: '#8b5cf6', chart: '#f97316',
+    inspector: '#14b8a6',
+  }
+
   return (
     <div className="w-full h-full flex flex-col overflow-hidden" style={{ overscrollBehavior: 'contain' }}>
       {/* Tab bar */}
@@ -273,15 +335,10 @@ export function FocusView() {
 
             const tile = entry.tile
             const isExited = exitedTileIds.includes(tile.id)
+            const isPinned = pinnedSet.has(tile.id)
+            const isSplit = splitTileId === tile.id
             const isDragging = dragTabId === tile.id
             const isDropTarget = dropTargetId === tile.id && dragTabId !== tile.id
-            // Tab accent color by tile type
-            const tabAccent: Record<string, string> = {
-              terminal: '#22c55e', http: '#3b82f6', postgres: '#a855f7',
-              browser: '#f59e0b', file: '#6b7280', lens: '#ec4899',
-              docker: '#06b6d4', k8s: '#8b5cf6', chart: '#f97316',
-              inspector: '#14b8a6',
-            }
             const accent = tabAccent[tile.kind] ?? '#6b7280'
 
             return (
@@ -293,9 +350,16 @@ export function FocusView() {
                 onDrop={(e) => handleDrop(e, tile.id)}
                 onDragEnd={handleDragEnd}
                 onMouseDown={(e) => {
-                  // Middle-click closes the tab
-                  if (e.button === 1) { e.preventDefault(); removeTile(tile.id) }
+                  // Middle-click closes the tab (unless pinned)
+                  if (e.button === 1) {
+                    e.preventDefault()
+                    if (!isPinned) removeTile(tile.id)
+                  }
                   e.stopPropagation()
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  setTabCtxMenu({ tileId: tile.id, x: e.clientX, y: e.clientY })
                 }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] shrink-0 cursor-grab active:cursor-grabbing transition-colors select-none ${
                   isActive
@@ -305,12 +369,27 @@ export function FocusView() {
                 style={{
                   borderLeft: isActive ? `2px solid ${accent}` : '2px solid transparent',
                   borderRight: 'none', borderTop: 'none', borderBottom: 'none',
-                  background: isActive ? `${accent}11` : 'transparent',
+                  background: isPinned
+                    ? (isActive ? `${accent}22` : `${accent}0a`)
+                    : (isActive ? `${accent}11` : 'transparent'),
                 }}
-                onClick={() => focusTile(tile.id)}
+                onClick={(e) => {
+                  if (e.shiftKey) {
+                    // Shift+click → open in split pane
+                    if (tile.id !== focusedId) {
+                      setSplitTileId(tile.id)
+                    }
+                  } else {
+                    // Normal click → focus and close split
+                    setSplitTileId(null)
+                    focusTile(tile.id)
+                  }
+                }}
               >
+                {isPinned && <Pin size={9} className="text-text-muted shrink-0" />}
                 <TileKindIcon kind={tile.kind} active={isActive} exited={isExited} size={11} />
                 <span className="truncate max-w-[100px]">{tile.name}</span>
+                {isSplit && <span className="text-[9px] text-blue-400 ml-0.5 shrink-0" title="Split view">{'\u2AFD'}</span>}
               </div>
             )
           })}
@@ -361,68 +440,137 @@ export function FocusView() {
         </div>
       </div>
 
+      {/* Tab right-click context menu (pin/unpin) */}
+      {tabCtxMenu && (
+        <div
+          ref={tabCtxRef}
+          className="fixed w-36 rounded border border-border bg-tile shadow-xl py-1 z-[99999]"
+          style={{ left: tabCtxMenu.x, top: tabCtxMenu.y }}
+        >
+          {pinnedSet.has(tabCtxMenu.tileId) ? (
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors"
+              onClick={() => { unpinTile(tabCtxMenu.tileId); setTabCtxMenu(null) }}
+            >
+              <Pin size={12} /> Unpin
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors"
+              onClick={() => { pinTile(tabCtxMenu.tileId); setTabCtxMenu(null) }}
+            >
+              <Pin size={12} /> Pin
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Breadcrumb bar */}
+      <BreadcrumbBar focusedTile={focusedTile} splitTile={isSplitActive ? splitTile : null} />
+
       {/* Content area with cards */}
       <div className="flex-1 min-h-0 relative">
-        {/* Left nav button */}
-        {focusEntries.length > 1 && (
-          <button
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-lg bg-surface/80 backdrop-blur border border-border flex items-center justify-center cursor-pointer hover:bg-surface transition-colors"
-            onClick={goPrev}
-          >
-            <svg className="w-4 h-4 text-text-secondary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10 3L5 8l5 5" />
-            </svg>
-          </button>
-        )}
-
-        {/* Right nav button */}
-        {focusEntries.length > 1 && (
-          <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-lg bg-surface/80 backdrop-blur border border-border flex items-center justify-center cursor-pointer hover:bg-surface transition-colors"
-            onClick={goNext}
-          >
-            <svg className="w-4 h-4 text-text-secondary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 3l5 5-5 5" />
-            </svg>
-          </button>
-        )}
-
-        {/* Scrollable cards */}
-        <div
-          ref={scrollRef}
-          className="w-full h-full overflow-x-auto overflow-y-hidden flex items-stretch"
-          style={{ scrollSnapType: 'x mandatory', scrollbarWidth: 'none', overscrollBehavior: 'contain' }}
-        >
-          <div className="flex items-stretch shrink-0" style={{ gap: 0 }}>
-            {/* Left padding to center first card */}
-            <div style={{ width: Math.round(containerW * 0.15) }} className="shrink-0" />
-
-            {focusEntries.map((entry) => {
-              if (entry.type === 'group') {
-                return (
-                  <GroupFocusCard
-                    key={entry.id}
-                    section={entry.section}
-                    tiles={entry.tiles}
-                    cardW={cardW}
-                    cardH={cardH}
-                  />
-                )
-              }
-              return (
+        {isSplitActive ? (
+          /* ── Split view: two panes side by side ── */
+          <div className="w-full h-full flex">
+            {/* Left pane (focused tile) */}
+            <div className="flex-1 min-w-0 h-full">
+              {focusedTile && (
                 <FocusCard
-                  key={entry.id}
-                  tile={entry.tile}
-                  cardW={cardW}
-                  cardH={cardH}
+                  tile={focusedTile}
+                  cardW={splitCardW}
+                  cardH={splitCardH}
+                  isSplitPane
                 />
-              )
-            })}
+              )}
+            </div>
 
-            {/* Right padding to allow last card to scroll to center */}
-            <div style={{ width: Math.round(containerW * 0.15) }} className="shrink-0" />
+            {/* Divider */}
+            <div className="w-px bg-border shrink-0" />
+
+            {/* Right pane (split tile) */}
+            <div className="flex-1 min-w-0 h-full relative">
+              {/* Close split button */}
+              <button
+                className="absolute top-2 right-2 z-30 w-5 h-5 rounded bg-surface/80 border border-border flex items-center justify-center cursor-pointer hover:bg-surface transition-colors"
+                onClick={() => setSplitTileId(null)}
+                title="Close split (Esc)"
+              >
+                <X size={10} className="text-text-muted" />
+              </button>
+              <FocusCard
+                tile={splitTile!}
+                cardW={splitCardW}
+                cardH={splitCardH}
+                isSplitPane
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          /* ── Normal single-card view ── */
+          <>
+            {/* Left nav button */}
+            {focusEntries.length > 1 && (
+              <button
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-lg bg-surface/80 backdrop-blur border border-border flex items-center justify-center cursor-pointer hover:bg-surface transition-colors"
+                onClick={goPrev}
+              >
+                <svg className="w-4 h-4 text-text-secondary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 3L5 8l5 5" />
+                </svg>
+              </button>
+            )}
+
+            {/* Right nav button */}
+            {focusEntries.length > 1 && (
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-lg bg-surface/80 backdrop-blur border border-border flex items-center justify-center cursor-pointer hover:bg-surface transition-colors"
+                onClick={goNext}
+              >
+                <svg className="w-4 h-4 text-text-secondary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 3l5 5-5 5" />
+                </svg>
+              </button>
+            )}
+
+            {/* Scrollable cards */}
+            <div
+              ref={scrollRef}
+              className="w-full h-full overflow-x-auto overflow-y-hidden flex items-stretch"
+              style={{ scrollSnapType: 'x mandatory', scrollbarWidth: 'none', overscrollBehavior: 'contain' }}
+            >
+              <div className="flex items-stretch shrink-0" style={{ gap: 0 }}>
+                {/* Left padding to center first card */}
+                <div style={{ width: Math.round(containerW * 0.15) }} className="shrink-0" />
+
+                {focusEntries.map((entry) => {
+                  if (entry.type === 'group') {
+                    return (
+                      <GroupFocusCard
+                        key={entry.id}
+                        section={entry.section}
+                        tiles={entry.tiles}
+                        cardW={cardW}
+                        cardH={cardH}
+                      />
+                    )
+                  }
+                  return (
+                    <FocusCard
+                      key={entry.id}
+                      tile={entry.tile}
+                      cardW={cardW}
+                      cardH={cardH}
+                    />
+                  )
+                })}
+
+                {/* Right padding to allow last card to scroll to center */}
+                <div style={{ width: Math.round(containerW * 0.15) }} className="shrink-0" />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -543,7 +691,7 @@ function GroupTileCell({ tile, cellW, cellH }: { tile: Tile; cellW: number; cell
 
 // ── Focus card (single tile) ──────────────────────────────────────────────────
 
-function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: number }) {
+function FocusCard({ tile, cardW, cardH, isSplitPane }: { tile: Tile; cardW: number; cardH: number; isSplitPane?: boolean }) {
   const cardRef = useRef<HTMLDivElement>(null)
   const focusedId = useStore((s) => s.focusedId)
   const exitedTileIds = useStore((s) => s.exitedTileIds)
@@ -629,10 +777,14 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
     setTimeout(() => renameInputRef.current?.select(), 0)
   }, [tile.name])
 
+  const pinnedTileIds = useStore((s) => s.pinnedTileIds)
+  const isPinned = pinnedTileIds.includes(tile.id)
+
   const handleClose = useCallback(() => {
     setCtxMenuOpen(false)
+    if (isPinned) return // Prevent closing pinned tabs
     removeTile(tile.id)
-  }, [tile.id, removeTile])
+  }, [tile.id, removeTile, isPinned])
 
   const borderClass = isExited
     ? 'border-red-500/40'
@@ -643,8 +795,8 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
   return (
     <div
       ref={cardRef}
-      className="shrink-0 flex flex-col"
-      style={{
+      className={isSplitPane ? 'flex flex-col w-full h-full' : 'shrink-0 flex flex-col'}
+      style={isSplitPane ? { padding: '8px 4px' } : {
         width: cardW,
         height: cardH,
         scrollSnapAlign: 'center',
@@ -740,7 +892,7 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
               )}
               <CtxItem icon={<Link size={12} />} label="Link Output" onClick={handleLinkOutput} />
               <div className="my-0.5 border-t border-border" />
-              <CtxItem icon={<X size={12} />} label="Close" onClick={handleClose} danger />
+              <CtxItem icon={<X size={12} />} label={isPinned ? 'Close (pinned)' : 'Close'} onClick={handleClose} danger disabled={isPinned} />
             </div>
           )}
         </div>
@@ -767,11 +919,119 @@ function FocusCard({ tile, cardW, cardH }: { tile: Tile; cardW: number; cardH: n
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function CtxItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+// ── Breadcrumb bar ─────────────────────────────────────────────────────────────
+
+function BreadcrumbBar({ focusedTile, splitTile }: { focusedTile: Tile | null | undefined; splitTile: Tile | null | undefined }) {
+  const [cwd, setCwd] = useState<string>('')
+  const [splitCwd, setSplitCwd] = useState<string>('')
+
+  // Fetch CWD for focused terminal tile
+  useEffect(() => {
+    if (!focusedTile || focusedTile.kind !== 'terminal') {
+      setCwd('')
+      return
+    }
+    let cancelled = false
+    const fetch = () => {
+      window.electronAPI.ptyGetCwd(focusedTile.id).then((result) => {
+        if (!cancelled && result) setCwd(result)
+      }).catch(() => {})
+    }
+    fetch()
+    const interval = setInterval(fetch, 2000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [focusedTile?.id, focusedTile?.kind])
+
+  // Fetch CWD for split terminal tile
+  useEffect(() => {
+    if (!splitTile || splitTile.kind !== 'terminal') {
+      setSplitCwd('')
+      return
+    }
+    let cancelled = false
+    const fetch = () => {
+      window.electronAPI.ptyGetCwd(splitTile.id).then((result) => {
+        if (!cancelled && result) setSplitCwd(result)
+      }).catch(() => {})
+    }
+    fetch()
+    const interval = setInterval(fetch, 2000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [splitTile?.id, splitTile?.kind])
+
+  const renderBreadcrumb = (tile: Tile | null | undefined, cwdPath: string) => {
+    if (!tile) return null
+
+    if (tile.kind !== 'terminal' || !cwdPath) {
+      // Non-terminal: show tile type and name
+      const kindLabels: Record<string, string> = {
+        terminal: 'Terminal', http: 'HTTP', postgres: 'PostgreSQL',
+        browser: 'Browser', file: 'File Viewer', lens: 'Lens',
+        docker: 'Docker', k8s: 'Kubernetes', chart: 'Chart', inspector: 'Inspector',
+      }
+      return (
+        <span className="text-text-muted truncate">
+          {kindLabels[tile.kind] ?? tile.kind} / {tile.name}
+        </span>
+      )
+    }
+
+    // Parse path into segments
+    const home = cwdPath.startsWith('/home/') ? cwdPath.split('/').slice(0, 3).join('/') : null
+    const displayPath = home && cwdPath.startsWith(home) ? '~' + cwdPath.slice(home.length) : cwdPath
+    const sep = cwdPath.includes('\\') ? '\\' : '/'
+    const segments = displayPath.split(sep).filter(Boolean)
+
+    return segments.map((seg, i) => {
+      // Build the real path up to this segment
+      const realSegments = cwdPath.split(sep).filter(Boolean)
+      const pathUpTo = sep + realSegments.slice(0, i + 1).join(sep)
+
+      return (
+        <React.Fragment key={i}>
+          {i > 0 && <span className="text-text-muted/40 mx-0.5">/</span>}
+          <span
+            className="text-text-muted hover:text-text-primary cursor-pointer hover:underline"
+            onClick={() => {
+              window.electronAPI.ptyWrite(tile.id, `cd ${pathUpTo}\r`)
+            }}
+          >
+            {seg}
+          </span>
+        </React.Fragment>
+      )
+    })
+  }
+
   return (
     <div
-      className={`flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors ${danger ? 'hover:!text-red-400' : ''}`}
-      onClick={onClick}
+      className="shrink-0 flex items-center px-3 gap-1 overflow-hidden"
+      style={{ height: BREADCRUMB_H, fontSize: 10, lineHeight: '10px' }}
+    >
+      <div className="flex items-center gap-0 truncate flex-1 min-w-0">
+        {renderBreadcrumb(focusedTile, cwd)}
+      </div>
+      {splitTile && (
+        <>
+          <div className="w-px h-3 bg-border mx-2 shrink-0" />
+          <div className="flex items-center gap-0 truncate flex-1 min-w-0">
+            {renderBreadcrumb(splitTile, splitCwd)}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function CtxItem({ icon, label, onClick, danger, disabled }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; disabled?: boolean }) {
+  return (
+    <div
+      className={`flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+        disabled
+          ? 'text-text-muted/40 cursor-not-allowed'
+          : `text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer ${danger ? 'hover:!text-red-400' : ''}`
+      }`}
+      onClick={disabled ? undefined : onClick}
     >
       {icon} {label}
     </div>

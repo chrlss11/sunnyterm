@@ -108,6 +108,8 @@ export interface CanvasStore {
   kanbanMode: boolean
   /** Stack of recently closed tiles for undo-close (max 20) */
   closedTileStack: Tile[]
+  /** Pinned tile IDs — pinned tabs stay first in the tab bar */
+  pinnedTileIds: string[]
 
   // ── Workspace ──────────────────────────────────────────────────────────────
   /** Named workspaces available (excludes __default__) */
@@ -176,6 +178,9 @@ export interface CanvasStore {
   restoreClosedTile: () => void
   clearCanvas: () => void
   triggerSavedToast: () => void
+
+  pinTile: (id: string) => void
+  unpinTile: (id: string) => void
 
   markTileExited: (id: string) => void
   markTileAlive: (id: string) => void
@@ -331,6 +336,7 @@ export const useStore = create<CanvasStore>()(
     autoGrid: false,
     kanbanMode: false,
     closedTileStack: [],
+    pinnedTileIds: [],
     workspaces: [],
     activeWorkspace: null,
     tileCwds: {},
@@ -463,7 +469,8 @@ export const useStore = create<CanvasStore>()(
           .map((t) => ({ ...t, outputLink: t.outputLink === id ? null : t.outputLink })),
         focusedId: s.focusedId === id ? null : s.focusedId,
         linkingFromId: s.linkingFromId === id ? null : s.linkingFromId,
-        exitedTileIds: s.exitedTileIds.filter((eid) => eid !== id)
+        exitedTileIds: s.exitedTileIds.filter((eid) => eid !== id),
+        pinnedTileIds: s.pinnedTileIds.filter((pid) => pid !== id)
       }))
     },
 
@@ -858,6 +865,16 @@ export const useStore = create<CanvasStore>()(
     triggerSavedToast: () => {
       toast.success('Saved')
     },
+
+    pinTile: (id) =>
+      set((s) => ({
+        pinnedTileIds: s.pinnedTileIds.includes(id)
+          ? s.pinnedTileIds
+          : [...s.pinnedTileIds, id]
+      })),
+
+    unpinTile: (id) =>
+      set((s) => ({ pinnedTileIds: s.pinnedTileIds.filter((pid) => pid !== id) })),
 
     markTileExited: (id) =>
       set((s) => ({
