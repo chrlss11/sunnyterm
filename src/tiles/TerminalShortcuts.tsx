@@ -9,7 +9,8 @@ const STORAGE_KEY = 'sunnyterm-terminal-shortcuts'
 
 const DEFAULT_SHORTCUTS: Shortcut[] = [
   { label: 'Claude', command: 'claude' },
-  { label: 'Claude YOLO', command: 'claude --dangerously-skip-permissions' }
+  { label: 'Claude YOLO', command: 'claude --dangerously-skip-permissions' },
+  { label: 'Remote Claude', command: 'ssh chrlss@$(hostname) -t "cd ~/projects && claude"' }
 ]
 
 function loadShortcuts(): Shortcut[] {
