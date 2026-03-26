@@ -119,6 +119,7 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     containerRef.current.appendChild(xtermElement)
 
     const currentTheme = THEMES[themeRef.current as ThemeName] ?? THEMES.dark
+    const isMacPlatform = navigator.platform.includes('Mac')
     const term = new Terminal({
       theme: currentTheme.terminal,
       fontFamily: '"Google Sans Mono", "Cascadia Code", Menlo, Monaco, Consolas, monospace',
@@ -128,8 +129,29 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
       cursorStyle: 'block',
       scrollback: 10000,
       allowProposedApi: true,
-      macOptionIsMeta: navigator.platform.includes('Mac'),
-      windowsMode: navigator.platform.includes('Win')
+      macOptionIsMeta: isMacPlatform,
+      windowsMode: !isMacPlatform,
+      rightClickSelectsWord: true,
+    })
+
+    // Ctrl+C copies when text is selected, otherwise sends SIGINT
+    // Ctrl+V pastes from clipboard
+    term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      if (!isMacPlatform && e.ctrlKey && !e.shiftKey && !e.altKey) {
+        if (e.key === 'c' && term.hasSelection()) {
+          e.preventDefault()
+          navigator.clipboard.writeText(term.getSelection())
+          return false
+        }
+        if (e.key === 'v') {
+          e.preventDefault()
+          navigator.clipboard.readText().then((text) => {
+            if (text) window.electronAPI.ptyWrite(tileId, text)
+          })
+          return false
+        }
+      }
+      return true
     })
 
     const fitAddon = new FitAddon()
