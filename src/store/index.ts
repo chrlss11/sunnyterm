@@ -955,12 +955,17 @@ export const useStore = create<CanvasStore>()(
     },
 
     setViewMode: (viewMode) => {
+      const prev = get().viewMode
       set({ viewMode })
       window.electronAPI.appStateSave({
         isDark: get().isDark,
         lastWorkspace: get().activeWorkspace,
         viewMode
       })
+      // Auto-grid when switching from focus back to canvas
+      if (prev === 'focus' && viewMode === 'canvas' && get().autoGrid) {
+        setTimeout(() => runAutoGrid(get, set), 100)
+      }
     },
 
     // ── Workspaces ────────────────────────────────────────────────────────────

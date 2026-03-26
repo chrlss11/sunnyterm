@@ -63,7 +63,7 @@ export function FocusView() {
   const sections = useStore((s) => s.sections)
   const focusedId = useStore((s) => s.focusedId)
   const exitedTileIds = useStore((s) => s.exitedTileIds)
-  const { focusTile, spawnTile } = useStore()
+  const { focusTile, spawnTile, removeTile } = useStore()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [showCreateMenu, setShowCreateMenu] = useState(false)
   const createMenuRef = useRef<HTMLDivElement>(null)
@@ -275,6 +275,15 @@ export function FocusView() {
             const isExited = exitedTileIds.includes(tile.id)
             const isDragging = dragTabId === tile.id
             const isDropTarget = dropTargetId === tile.id && dragTabId !== tile.id
+            // Tab accent color by tile type
+            const tabAccent: Record<string, string> = {
+              terminal: '#22c55e', http: '#3b82f6', postgres: '#a855f7',
+              browser: '#f59e0b', file: '#6b7280', lens: '#ec4899',
+              docker: '#06b6d4', k8s: '#8b5cf6', chart: '#f97316',
+              inspector: '#14b8a6',
+            }
+            const accent = tabAccent[tile.kind] ?? '#6b7280'
+
             return (
               <div
                 key={tile.id}
@@ -283,12 +292,21 @@ export function FocusView() {
                 onDragOver={(e) => handleDragOver(e, tile.id)}
                 onDrop={(e) => handleDrop(e, tile.id)}
                 onDragEnd={handleDragEnd}
-                onMouseDown={(e) => e.stopPropagation()}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] shrink-0 cursor-grab active:cursor-grabbing border transition-colors select-none ${
+                onMouseDown={(e) => {
+                  // Middle-click closes the tab
+                  if (e.button === 1) { e.preventDefault(); removeTile(tile.id) }
+                  e.stopPropagation()
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] shrink-0 cursor-grab active:cursor-grabbing transition-colors select-none ${
                   isActive
-                    ? 'border-border text-text-primary'
-                    : 'border-transparent text-text-muted hover:text-text-secondary'
+                    ? 'text-text-primary'
+                    : 'text-text-muted hover:text-text-secondary'
                 } ${isDragging ? 'opacity-30 scale-95' : ''} ${isDropTarget ? 'ring-2 ring-blue-400/60 scale-105' : ''}`}
+                style={{
+                  borderLeft: isActive ? `2px solid ${accent}` : '2px solid transparent',
+                  borderRight: 'none', borderTop: 'none', borderBottom: 'none',
+                  background: isActive ? `${accent}11` : 'transparent',
+                }}
                 onClick={() => focusTile(tile.id)}
               >
                 <TileKindIcon kind={tile.kind} active={isActive} exited={isExited} size={11} />
