@@ -276,14 +276,15 @@ export function FocusView() {
             const isDragging = dragTabId === tile.id
             const isDropTarget = dropTargetId === tile.id && dragTabId !== tile.id
             return (
-              <button
+              <div
                 key={tile.id}
                 draggable
                 onDragStart={(e) => handleDragStart(e, tile.id)}
                 onDragOver={(e) => handleDragOver(e, tile.id)}
                 onDrop={(e) => handleDrop(e, tile.id)}
                 onDragEnd={handleDragEnd}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] shrink-0 cursor-grab active:cursor-grabbing border transition-colors ${
+                onMouseDown={(e) => e.stopPropagation()}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] shrink-0 cursor-grab active:cursor-grabbing border transition-colors select-none ${
                   isActive
                     ? 'border-border text-text-primary'
                     : 'border-transparent text-text-muted hover:text-text-secondary'
@@ -292,7 +293,7 @@ export function FocusView() {
               >
                 <TileKindIcon kind={tile.kind} active={isActive} exited={isExited} size={11} />
                 <span className="truncate max-w-[100px]">{tile.name}</span>
-              </button>
+              </div>
             )
           })}
         </div>

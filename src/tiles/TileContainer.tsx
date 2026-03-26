@@ -137,11 +137,31 @@ export function TileContainer({ tile, isSelected }: Props) {
     []
   )
 
-  const handleDuplicate = useCallback(() => {
+  const handleDuplicate = useCallback(async () => {
     setCtxMenuOpen(false)
-    const newTile = spawnTile(tile.kind, tile.x + 30, tile.y + 30, undefined, undefined, tile.shell)
-    if (tile.userRenamed) {
-      renameTile(newTile.id, tile.name + ' (copy)')
+
+    // Get CWD of the original terminal
+    let cwd: string | undefined
+    if (tile.kind === 'terminal') {
+      cwd = (await window.electronAPI.ptyGetCwd(tile.id).catch(() => null)) ?? undefined
+    }
+
+    // Create new tile with same shell, position offset
+    const newTile = spawnTile(tile.kind, tile.x + 30, tile.y + 30, tile.initialUrl, tile.initialPath, tile.shell)
+
+    // Copy fontSize
+    if (tile.fontSize) {
+      useStore.getState().setTileFontSize(newTile.id, tile.fontSize)
+    }
+
+    // Copy name
+    renameTile(newTile.id, tile.name + ' (copy)')
+
+    // Set CWD for the new terminal — store it so TerminalTile picks it up on mount
+    if (cwd && tile.kind === 'terminal') {
+      useStore.setState((s) => ({
+        tileCwds: { ...s.tileCwds, [newTile.id]: cwd! }
+      }))
     }
   }, [tile, spawnTile, renameTile])
 
