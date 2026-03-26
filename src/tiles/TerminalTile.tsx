@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import type { ILink, ILinkProvider } from '@xterm/xterm'
 import { SearchAddon } from '@xterm/addon-search'
+import { ImageAddon } from '@xterm/addon-image'
 
 import '@xterm/xterm/css/xterm.css'
 import { useStore } from '../store'
@@ -130,35 +131,52 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
       scrollback: 10000,
       allowProposedApi: true,
       macOptionIsMeta: isMacPlatform,
-      windowsMode: !isMacPlatform,
-      rightClickSelectsWord: true,
+      // Don't use windowsMode — it breaks text selection
     })
 
     // Ctrl+C copies when text is selected, otherwise sends SIGINT
     // Ctrl+V pastes from clipboard
+    // Ctrl+A selects all terminal text
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (!isMacPlatform && e.ctrlKey && !e.shiftKey && !e.altKey) {
+      if (!isMacPlatform && e.ctrlKey && !e.shiftKey && !e.altKey && e.type === 'keydown') {
         if (e.key === 'c' && term.hasSelection()) {
-          e.preventDefault()
           navigator.clipboard.writeText(term.getSelection())
           return false
         }
         if (e.key === 'v') {
-          e.preventDefault()
           navigator.clipboard.readText().then((text) => {
             if (text) window.electronAPI.ptyWrite(tileId, text)
           })
+          return false
+        }
+        if (e.key === 'a') {
+          term.selectAll()
           return false
         }
       }
       return true
     })
 
+    // Right-click context menu: copy if selected, paste otherwise
+    xtermElement.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      if (term.hasSelection()) {
+        navigator.clipboard.writeText(term.getSelection())
+        term.clearSelection()
+      } else {
+        navigator.clipboard.readText().then((text) => {
+          if (text) window.electronAPI.ptyWrite(tileId, text)
+        })
+      }
+    })
+
     const fitAddon = new FitAddon()
     const searchAddon = new SearchAddon()
 
+    const imageAddon = new ImageAddon()
     term.loadAddon(fitAddon)
     term.loadAddon(searchAddon)
+    term.loadAddon(imageAddon)
 
     term.open(xtermElement)
 
@@ -516,6 +534,28 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     setInstanceKey((k) => k + 1)
   }
 
+  // ── Paste image from clipboard (Ctrl+V with image) ──────────────────────
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const term = termRef.current
+    if (!term) return
+    const items = Array.from(e.clipboardData.items)
+    const imageItem = items.find((item) => item.type.startsWith('image/'))
+    if (imageItem) {
+      e.preventDefault()
+      const file = imageItem.getAsFile()
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1]
+        const name = btoa(file.name || 'clipboard.png')
+        const seq = `\x1b]1337;File=inline=1;size=${file.size};name=${name}:${base64}\x07`
+        term.write(seq)
+        term.write('\r\n')
+      }
+      reader.readAsDataURL(file)
+    }
+  }, [])
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -555,7 +595,7 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
   }, [])
 
   return (
-    <div className="w-full h-full relative" onDrop={handleDrop} onDragOver={handleDragOver}>
+    <div className="w-full h-full relative" onDrop={handleDrop} onDragOver={handleDragOver} onPaste={handlePaste}>
       <div ref={containerRef} className="w-full h-full" />
 
       {exitInfo === null && <TerminalShortcuts tileId={tileId} />}
