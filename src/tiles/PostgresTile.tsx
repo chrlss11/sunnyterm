@@ -817,7 +817,7 @@ function SchemaTreeNode({
   }
 
   const handleContextMenu = (e: React.MouseEvent) => {
-    if ((node.type === 'table' || node.type === 'view') && node.schema) {
+    if ((node.type === 'table' || node.type === 'view' || node.type === 'database') && (node.schema || node.type === 'database')) {
       e.preventDefault()
       e.stopPropagation()
       setShowActions(prev => !prev)
@@ -897,6 +897,39 @@ function SchemaTreeNode({
       </div>
 
       {/* Table/View action buttons (shown on right-click) */}
+      {/* Database action buttons */}
+      {showActions && node.type === 'database' && (
+        <div
+          className="flex items-center gap-1 py-1 bg-white/[0.04] border-y border-border"
+          style={{ paddingLeft: paddingLeft + 18 }}
+        >
+          <button
+            className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation()
+              // Switch to this DB and open a new query
+              if (node.name !== currentDb) onDatabaseClick(node.name)
+              onTableAction('select', 'public', '', undefined)
+              setShowActions(false)
+            }}
+          >
+            New Query
+          </button>
+          <button
+            className="text-[9px] px-1.5 py-0.5 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (node.name !== currentDb) onDatabaseClick(node.name)
+              // Set SQL to list all tables
+              onTableAction('select', 'information_schema', 'tables', undefined)
+              setShowActions(false)
+            }}
+          >
+            List Tables
+          </button>
+        </div>
+      )}
+      {/* Table/View action buttons */}
       {showActions && (node.type === 'table' || node.type === 'view') && node.schema && (
         <div
           className="flex items-center gap-1 py-1 bg-white/[0.04] border-y border-border"

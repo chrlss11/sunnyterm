@@ -134,14 +134,29 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
       // Don't use windowsMode — it breaks text selection
     })
 
+    // Track selection text so we can copy even if xterm clears it on keydown
+    let lastSelection = ''
+    term.onSelectionChange(() => {
+      const sel = term.getSelection()
+      if (sel) lastSelection = sel
+    })
+
     // Ctrl+C copies when text is selected, otherwise sends SIGINT
     // Ctrl+V pastes from clipboard
     // Ctrl+A selects all terminal text
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (!isMacPlatform && e.ctrlKey && !e.shiftKey && !e.altKey && e.type === 'keydown') {
-        if (e.key === 'c' && term.hasSelection()) {
-          navigator.clipboard.writeText(term.getSelection())
-          return false
+        if (e.key === 'c') {
+          // Check both current and cached selection
+          const sel = term.hasSelection() ? term.getSelection() : lastSelection
+          if (sel) {
+            navigator.clipboard.writeText(sel)
+            lastSelection = ''
+            term.clearSelection()
+            return false // Don't send SIGINT
+          }
+          // No selection → let it through as SIGINT
+          return true
         }
         if (e.key === 'v') {
           navigator.clipboard.readText().then((text) => {

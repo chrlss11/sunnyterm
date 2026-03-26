@@ -4,8 +4,6 @@ import { TileContainer, TITLE_BAR_H } from '../tiles/TileContainer'
 import { SectionBox } from './SectionBox'
 import { Minimap } from '../minimap/Minimap'
 import { parseCurl } from '../lib/parseCurl'
-import { TrailOverlay } from './TrailOverlay'
-import { TrailControls } from './TrailControls'
 import { CommandPalette, TargetingOverlay, type SpatialAction } from './CommandPalette'
 import { KanbanOverlay } from './KanbanOverlay'
 import { AlignStartVertical, AlignEndVertical, AlignStartHorizontal, AlignEndHorizontal, AlignCenterVertical, AlignCenterHorizontal, Rows3, Columns3, LayoutGrid, Terminal, Globe, Database, Compass, FolderOpen } from 'lucide-react'
@@ -468,15 +466,10 @@ export function InfiniteCanvas() {
           />
         )}
 
-        {/* Canvas trail overlay (inside canvas transform) */}
-        <TrailOverlay />
       </div>
 
       {/* Link lines overlay (screen-space SVG, not scaled by canvas transform) */}
       <LinkLines tiles={tiles} panX={panX} panY={panY} zoom={zoom} />
-
-      {/* Canvas trail controls (floating, bottom-left) */}
-      <TrailControls />
 
       {/* Minimap (fixed overlay, not affected by canvas transform) */}
       {showMinimap && <Minimap />}
