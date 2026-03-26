@@ -442,21 +442,29 @@ export function TerminalTile({ tileId, overrideW, overrideH }: Props) {
     }
   }, [theme])
 
-  // ── Adaptive font size: larger in focus mode, normal in canvas ──────────
+  // ── Adaptive font size: tile.fontSize is the canvas size, focus scales up ──
   const viewMode = useStore((s) => s.viewMode)
 
   useEffect(() => {
     const term = termRef.current
     if (!term || !tile) return
-    const baseFontSize = tile.fontSize ?? 13
+
+    // tile.fontSize is the BASE size for canvas mode
+    const canvasSize = tile.fontSize ?? 13
     let fs: number
+
     if (overrideW && overrideH) {
-      // Focus mode: scale font up based on how much bigger the view is
-      const ratio = Math.min(overrideW / tile.w, overrideH / tile.h)
-      fs = Math.round(Math.min(baseFontSize * Math.max(ratio * 0.85, 1), 24))
+      // Focus mode: scale up proportionally to the viewport/tile ratio
+      const wRatio = overrideW / Math.max(tile.w, 300)
+      const hRatio = overrideH / Math.max(tile.h, 200)
+      const scale = Math.min(wRatio, hRatio)
+      // Scale the canvas font size up, clamped between canvasSize and 28
+      fs = Math.round(Math.max(canvasSize, Math.min(canvasSize * scale * 0.75, 28)))
     } else {
-      fs = baseFontSize
+      // Canvas mode: use the tile's font size directly
+      fs = canvasSize
     }
+
     if (term.options.fontSize !== fs) {
       term.options.fontSize = fs
       try { fitAddonRef.current?.fit() } catch {}
