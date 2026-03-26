@@ -145,6 +145,45 @@ export function InfiniteCanvas() {
     }
   }, [])
 
+  // ── Native wheel handler (passive: false so preventDefault works) ─────────
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      if (useStore.getState().viewMode === 'focus') return
+      // Check if wheel is inside a tile's scrollable content
+      const path = e.composedPath()
+      const insideTile = path.some((node) => {
+        if (!(node instanceof HTMLElement)) return false
+        return node.classList.contains('xterm-viewport') ||
+               node.classList.contains('xterm-screen') ||
+               node.tagName === 'PRE' ||
+               node.tagName === 'TEXTAREA' ||
+               node.dataset.tileScroll !== undefined ||
+               node.style.overflow === 'auto' || node.style.overflow === 'scroll' ||
+               node.style.overflowY === 'auto' || node.style.overflowY === 'scroll'
+      })
+      if (insideTile) return
+      e.preventDefault()
+      if (e.metaKey || e.ctrlKey) {
+        const { zoom: currentZoom, panX: currentPanX, panY: currentPanY } = useStore.getState()
+        const rect = el.getBoundingClientRect()
+        const localX = e.clientX - rect.left
+        const localY = e.clientY - rect.top
+        const factor = Math.exp(-e.deltaY * 0.008)
+        const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, currentZoom * factor))
+        const newPanX = localX - (localX - currentPanX) * (newZoom / currentZoom)
+        const newPanY = localY - (localY - currentPanY) * (newZoom / currentZoom)
+        useStore.setState({ zoom: newZoom, panX: newPanX, panY: newPanY })
+      } else {
+        panBy(-e.deltaX, -e.deltaY)
+      }
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [panBy])
+
   // ── Paste curl detection ──────────────────────────────────────────────────
 
   useEffect(() => {
@@ -308,36 +347,6 @@ export function InfiniteCanvas() {
     [endDrag]
   )
 
-  // ── Wheel (zoom + pan) ────────────────────────────────────────────────────
-
-  const onWheel = useCallback(
-    (e: React.WheelEvent<HTMLDivElement>) => {
-      if (useStore.getState().viewMode === 'focus') return
-      // If the scroll target is inside a tile content area (xterm, scrollable div), let it scroll naturally
-      const target = e.target as HTMLElement
-      if (target.closest('.xterm-viewport') || target.closest('[data-tile-scroll]')) return
-      e.preventDefault()
-      if (e.metaKey || e.ctrlKey) {
-        // Pinch-to-zoom (ctrlKey) or Cmd+scroll (metaKey):
-        // Use exponential zoom so that fast pinches zoom faster than slow ones.
-        // deltaY sign: positive = zoom out, negative = zoom in (standard browser behaviour)
-        const { zoom: currentZoom, panX: currentPanX, panY: currentPanY } = useStore.getState()
-        const rect = containerRef.current?.getBoundingClientRect()
-        const localX = e.clientX - (rect?.left ?? 0)
-        const localY = e.clientY - (rect?.top ?? 0)
-        const factor = Math.exp(-e.deltaY * 0.008)
-        const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, currentZoom * factor))
-        const newPanX = localX - (localX - currentPanX) * (newZoom / currentZoom)
-        const newPanY = localY - (localY - currentPanY) * (newZoom / currentZoom)
-        useStore.setState({ zoom: newZoom, panX: newPanX, panY: newPanY })
-      } else {
-        // Plain scroll = pan
-        panBy(-e.deltaX, -e.deltaY)
-      }
-    },
-    [panBy]
-  )
-
   // ── Context menu ─────────────────────────────────────────────────────────
 
   const onContextMenu = useCallback(
@@ -386,7 +395,6 @@ export function InfiniteCanvas() {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onWheel={onWheel}
       onContextMenu={onContextMenu}
       onMouseMove={(e) => setMouseScreen({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setMouseScreen(null)}
